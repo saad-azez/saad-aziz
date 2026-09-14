@@ -1,0 +1,156 @@
+/**
+ * Brand tokens — the single source of truth for the whole site.
+ *
+ * Identity: PORCELAIN & WINE. A warm mineral ground — porcelain by day,
+ * graphite by night — carrying one object in a lettered material, and a
+ * muted wine accent shared by typography and the signature materials. Two schemes, one palette: every role below has a light value and a
+ * dark value. The page does NOT follow the reader's system setting: it is
+ * porcelain while it is day in Karachi and graphite while it is night there
+ * (`src/brand/scheme.js` sets `data-scheme` on <html>). A reader's own
+ * toggle can be offered later through `setScheme()`.
+ *
+ * Nothing else in the codebase declares a colour. The DOM reads these directly
+ * as `var(--…)`; the WebGL stage reads the same values back out of this
+ * stylesheet through `src/brand/palette.js` and re-reads them when the scheme
+ * flips, so a change here reaches the shaders and the page in one edit.
+ *
+ * WEBFLOW: create each colour once as a Variable with two modes, Light and
+ * Dark, using the two value sets below. See WEBFLOW.md.
+ *
+ * See BRAND.md for what each role means and when to reach for it.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* --- ground: porcelain ------------------------------------------------ */
+  --ground: #f2efeb;           /* page ground, and the canvas ground */
+  --ground-raise: #f8f5f1;     /* anything sitting above the ground */
+  --ground-glow: #faf7f3;      /* the lit middle of the backdrop (3D only) */
+  --ground-edge: #e5dfdb;      /* the backdrop's corners (3D only) */
+
+  /* --- ink: graphite on stone ------------------------------------------- */
+  --ink: #25202a;              /* primary: display type, the count */
+  --ink-2: #625964;            /* secondary: body copy */
+  --ink-3: #827983;            /* muted: labels, meta */
+  --rule: #d7cdd0;             /* hairlines, dividers, the rails */
+
+  /* --- accent: muted wine ------------------------------------------------- */
+  --accent: #87475a;           /* the signal — labels, the %, silhouette edges */
+
+  /* --- halo: the clock's hint of day or night --------------------------- */
+  --halo-light: rgba(255, 253, 248, 1);   /* sunlight on the paper, by day */
+  --halo-shade: rgba(37, 32, 42, .18);    /* a soft shadow, by night */
+
+  /* --- figure: the 3D word (3D only) ------------------------------------- */
+  --figure: #302630;           /* the letters' lit faces */
+  --figure-shade: #17131c;     /* their down-facing sides */
+  --figure-sky: #625365;       /* their up-facing sides */
+  --figure-bounce: #b7a3ab;    /* light bounced up off the ground */
+  --figure-highlight: #a998a2; /* the specular glint */
+
+  /* --- type -------------------------------------------------------------- */
+  --font-display: 'Aminute', 'Manrope', system-ui, sans-serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+  --font-editorial: 'DM Serif Display', Georgia, serif;
+
+  /*
+   * Fluid type. Each step is `clamp(min, rem + vw, max)`, solved between a
+   * 320px and a 1440px viewport, so sizes move continuously instead of
+   * snapping at breakpoints.
+   *
+   * The middle term keeps a rem component on purpose: a pure `vw` size ignores
+   * the reader's own font-size setting entirely, which is an accessibility
+   * failure that is invisible until someone relies on it. With rem in the mix,
+   * the type still answers to browser zoom and to a raised default size.
+   */
+  --step-label: clamp(0.625rem, 0.6rem + 0.09vw, 0.6875rem);    /* 10 → 11px */
+  --step-unit: clamp(0.6875rem, 0.6rem + 0.45vw, 1rem);         /* 11 → 16px */
+  --step-body: clamp(0.8125rem, 0.777rem + 0.18vw, 0.9375rem);  /* 13 → 15px */
+  --step-lede: clamp(0.9375rem, 0.8125rem + 0.625vw, 1.375rem);  /* 15 → 22px, the hero statement */
+  --step-title: clamp(2.75rem, 1.1rem + 6.6vw, 7.5rem);           /* 44 → 120px, sheet titles in the display face */
+  --step-mono: clamp(0.625rem, 0.58rem + 0.2vw, 0.75rem);          /* 10 → 12px, the small labels */
+  --step-bio: clamp(1.125rem, 0.9rem + 0.85vw, 1.5rem);            /* 18 → 24px, the bio */
+  --step-now: clamp(1.125rem, 0.9rem + 0.9vw, 1.625rem);           /* 18 → 26px, "Currently" */
+  --step-display: clamp(3.5rem, 1.86rem + 8.21vw, 9.25rem);     /* 56 → 148px */
+
+  --tracking-label: 0.18em;
+  /* The display face is narrow and already tightly fitted, so it is left alone.
+     The negative tracking that suited a wide face closes this one up. */
+  --tracking-display: 0em;
+
+  /* --- space ------------------------------------------------------------- */
+  /*
+   * `--rail` is the width of a side margin; `--gutter` is the breathing room
+   * inside a margin. `--rail-top` is the height of the shelved head rail
+   * (Nav.css) — nothing on the page reads it now, and the side rails run from
+   * the top edge of the viewport. `--frame-inset` is rail and gutter together, which is where page
+   * content is allowed to start.
+   *
+   * Because the frame derives from the rail, the relationship between the
+   * margin and the content holds at every viewport width on its own — there is
+   * no size at which someone has to remember to update the other number.
+   */
+  --rail: clamp(18px, 3.2vw, 56px);
+  --rail-top: clamp(44px, 4.4vw, 64px);
+  --gutter: clamp(16px, 2.4vw, 40px);
+  --frame-inset: calc(var(--rail) + var(--gutter));
+  /* The vertical breathing room above and below each sheet of the set. */
+  --sheet-pad: clamp(72px, 9vw, 150px);
+}
+
+/*
+ * A night plate: one sheet set in the other scheme. The same roles, swapped —
+ * so a dark plate in a light set becomes a light plate in a dark one, and
+ * nothing anywhere else has to know which scheme it is in.
+ */
+.sheet--night {
+  --ground: #19151c;
+  --ground-raise: #231c26;
+  --ink: #f3ecee;
+  --ink-2: #bdb0ba;
+  --ink-3: #91818e;
+  --rule: #40343e;
+  --accent: #dba8b9;
+}
+:root[data-scheme="night"] .sheet--night {
+    --ground: #f2efeb;
+    --ground-raise: #f8f5f1;
+    --ink: #25202a;
+    --ink-2: #625964;
+    --ink-3: #827983;
+    --rule: #d7cdd0;
+    --accent: #87475a;
+}
+
+/* The same roles, by night. Nothing else changes: the type, the spacing and
+   the layout are scheme-blind. */
+:root[data-scheme="night"] {
+    color-scheme: dark;
+
+    /* --- ground: graphite ------------------------------------------------ */
+    --ground: #19151c;
+    --ground-raise: #231c26;
+    --ground-glow: #28212c;
+    --ground-edge: #100d13;
+
+    /* --- ink: bone on graphite ------------------------------------------- */
+    --ink: #f3ecee;
+    --ink-2: #bdb0ba;
+    --ink-3: #91818e;
+    --rule: #40343e;
+
+    /* --- accent: muted wine, lifted for the dark ------------------------- */
+    --accent: #dba8b9;
+
+    /* --- halo: a shadow at night, a little moonlight ---------------------- */
+    --halo-light: rgba(255, 244, 230, .14);
+    --halo-shade: rgba(0, 0, 0, .4);
+
+    /* --- figure: bone letters ------------------------------------------ */
+    --figure: #e9dfe5;
+    --figure-shade: #4b3545;
+    --figure-sky: #927b8d;
+    --figure-bounce: #8b6b7c;
+    --figure-highlight: #ffffff;
+}

@@ -1,0 +1,16 @@
+/**
+ * Hero route — layout styles.
+ *
+ * The page shell the loader and the hero sit inside. Kept with the route rather
+ * than in `global.css` because it belongs to this view, not to the whole site.
+ *
+ * WEBFLOW HANDOFF
+ * One class, no combinators. See WEBFLOW.md.
+ */
+
+/* .site-shell
+   The page's Body wrapper · Min height: 100svh */
+.site-shell {
+  min-height: 100svh;
+  background-color: var(--ground);
+}

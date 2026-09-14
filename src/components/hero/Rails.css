@@ -1,0 +1,68 @@
+/**
+ * Rails — the drafting margins down each side of the viewport.
+ *
+ * WEBFLOW HANDOFF
+ * Four classes, no combinators. `.rail--left` / `.rail--right` / `.rail--visible`
+ * are combo classes on `.rail`. One property needs an embed: the
+ * `repeating-linear-gradient` on `.rail__scale`. See WEBFLOW.md.
+ */
+
+/* .rail
+   Div Block · Position: Fixed · top 0, bottom 0 · z-index 20
+   The two side margins run the full height of the viewport. There is no head
+   rail on the page any more (Nav.css is shelved), so they start at the very
+   top edge — hanging them from `--rail-top` left an empty band above each one.
+   The gutter is the rail's width, so the frame margin and the rail are the
+   same measurement — there is only one number to change. */
+.rail {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  z-index: 20;
+  width: var(--rail);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* .rail--visible  ·  combo class
+   Held back until the loader hands over, like the rest of the chrome. */
+.rail--visible {
+  visibility: visible;
+}
+
+/* .rail--left  ·  combo class */
+.rail--left {
+  left: 0;
+  border-right: 1px solid var(--rule);
+}
+
+/* .rail--right  ·  combo class */
+.rail--right {
+  right: 0;
+  border-left: 1px solid var(--rule);
+}
+
+/* .rail__scale
+   Div Block · Position: Absolute · the ruled edge
+   Embed needed: repeating-linear-gradient. A tick every 12px — an actual
+   scale, the way a drawing's margin is ruled. */
+.rail__scale {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--rule) 0,
+    var(--rule) 1px,
+    transparent 1px,
+    transparent 12px
+  );
+  opacity: 0.85;
+}
+
+.rail--left .rail__scale { right: 0; }
+.rail--right .rail__scale { left: 0; }
+
+/* No breakpoint: `--rail` is a fluid clamp, so the margin narrows to a hairline
+   on a phone and opens to its full width on a desktop on its own. */

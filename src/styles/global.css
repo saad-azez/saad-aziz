@@ -1,0 +1,91 @@
+@import '../brand/tokens.css';
+
+@font-face { font-family: 'Manrope'; font-style: normal; font-weight: 200 800; font-display: swap; src: url('/fonts/manrope.ttf') format('truetype'); }
+@font-face { font-family: 'DM Serif Display'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/dm-serif-display.ttf') format('truetype'); }
+
+
+/**
+ * The display face is self-hosted from `public/fonts/`, not fetched from a
+ * font service — so it is a real asset of this project and the `media` channel
+ * of the load tracker sees it.
+ *
+ * One weight only. Never ask for a bold: the browser will synthesise one by
+ * smearing the outlines, and on a display face at size that is immediately
+ * visible.
+ */
+@font-face {
+  font-family: 'Aminute';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/aminute.woff2') format('woff2'),
+       url('/fonts/aminute.woff') format('woff');
+}
+
+/**
+ * Global styles — and only global styles.
+ *
+ * What belongs here: the webfont link, the brand tokens, the reset, and the
+ * defaults on `html` and `body`. These are the things you change once and the
+ * whole site moves.
+ *
+ * What does not belong here: anything that styles a component. Those live in a
+ * `.css` file beside the component that uses them, imported by that component,
+ * so a component is one folder and deleting it takes its styles with it.
+ *
+ *   src/components/loader/Loader.css   the loader
+ *   src/components/hero/Hero.css       the hero
+ *   src/components/hero/Rails.css      the drafting rails
+ *   src/routes/HeroRoute.css           the page shell
+ *
+ * WEBFLOW HANDOFF
+ * The rules below are the ones that live in Webflow's own global settings, not
+ * as classes: fonts go in Project Settings → Fonts, the tokens become Webflow
+ * Variables, and the `body` rule is the Body (All Pages) tag selector. See
+ * WEBFLOW.md.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background-color: var(--ground);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Webflow: Body (All Pages) tag selector. */
+body {
+  margin: 0;
+  min-width: 320px;
+  color: var(--ink);
+  background-color: var(--ground);
+  font-family: var(--font-body);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The loader holds the page: while it is up, nothing scrolls. Script toggles
+   the class on <html> and lifts it on the loader's completion. */
+html.is-loading {
+  overflow: hidden;
+}
+
+/* .ph — an unfilled placeholder from src/content/site.js, shown as one: muted,
+   and underlined with a dashed hairline so it cannot be mistaken for copy.
+   Search the content file for "[" to find every one. */
+.ph {
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-decoration-color: var(--ink-3);
+  text-decoration-thickness: 1px;
+  text-underline-offset: .22em;
+}
+
+html { scroll-behavior: smooth; scroll-padding-top: 32px; }
+::selection { background: var(--accent); color: var(--ground); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

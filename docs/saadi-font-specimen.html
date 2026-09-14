@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAADi Display — independent glyphs</title>
+<link rel="icon" href="data:,">
+<style>
+@font-face { font-family: SAADi; src: url('../public/fonts/SAADiDisplay-Regular.otf') format('opentype'); }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 40px; color: #302932; background: #f4f1ed; font: 15px system-ui; }
+h1 { font-size: 22px; font-weight: 500; }
+p { max-width: 700px; line-height: 1.6; }
+.glyphs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; margin: 40px 0; }
+.glyph { border: 1px solid #d4ccd0; text-align: center; padding: 24px 4px; }
+.letter { display: block; font: 150px/1.2 SAADi; }
+.word { font: 160px/1.4 SAADi; white-space: nowrap; }
+@media (max-width: 800px) { body { padding: 20px; } .glyphs { gap: 8px; } .letter { font-size: 16vw; } .word { font-size: 20vw; } }
+</style>
+<h1>SAADi Display — independent glyphs</h1>
+<p>These letters use the actual OpenType font directly. No 3D renderer, clipping mask, or connecting flourish is present.</p>
+<div class="glyphs">
+  <div class="glyph"><span class="letter">S</span>S</div>
+  <div class="glyph"><span class="letter">A</span>A</div>
+  <div class="glyph"><span class="letter">D</span>D</div>
+  <div class="glyph"><span class="letter">i</span>i</div>
+  <div class="glyph"><span class="letter">a</span>a</div>
+</div>
+<div class="word">SAADi</div>
+<p>Both A letters use the same glyph. The hero's animated A-to-S flourish is a separate ornament, not part of either letter.</p>
+</html>

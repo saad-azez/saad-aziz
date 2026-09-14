@@ -1,0 +1,113 @@
+/**
+ * Sheet — one numbered sheet of the drawing set.
+ *
+ * WEBFLOW HANDOFF
+ * One rule, one class. `.sheet--night` is a combo class whose only job is to
+ * swap the colour tokens (declared in tokens.css, where every colour lives).
+ * The reveal attributes (`data-rule`, `data-line`, `data-rise`) are custom
+ * attributes on the elements — set them in the element settings panel.
+ */
+
+/* .sheet
+   Section · padded to the frame inset so it sits between the rails, and a
+   full sheet-pad above and below so each one breathes like a page. */
+.sheet {
+  position: relative;
+  padding: var(--sheet-pad) var(--frame-inset);
+  background-color: var(--ground);
+  color: var(--ink);
+}
+
+/* .sheet__head
+   The head every sheet shares. Two columns: the title on the left, the intro
+   on the right, both sitting on the same baseline. */
+.sheet__head {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  column-gap: clamp(28px, 5vw, 96px);
+  row-gap: clamp(20px, 3vw, 40px);
+  align-items: end;
+  padding-top: clamp(18px, 2vw, 28px);
+}
+
+/* .sheet__rule
+   The head's top edge. Drawn in by script as the sheet enters. */
+.sheet__rule {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: var(--rule);
+}
+
+/* .sheet__meta
+   The margin note: sheet number on the left, the sheet's name on the right. */
+.sheet__meta {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+  font-size: var(--step-label);
+  font-weight: 500;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sheet__no-key {
+  margin-right: .9em;
+  color: var(--accent);
+}
+
+/* .sheet__title
+   The display face at sheet size. One weight, no tracking: the face is doing
+   the art direction on its own. */
+.sheet__title {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--step-title);
+  font-weight: 400;
+  line-height: .94;
+  letter-spacing: var(--tracking-display);
+  color: var(--ink);
+}
+
+/* .sheet__title-line
+   One line of the title, and its mask. The text inside rises out of it. */
+.sheet__title-line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: .06em;
+  margin-bottom: -.06em;
+}
+.sheet__title-text {
+  display: block;
+  will-change: transform;
+}
+
+/* .sheet__intro */
+.sheet__intro {
+  grid-column: 2;
+  justify-self: start;
+  max-width: 42ch;
+  margin: 0;
+  font-size: var(--step-lede);
+  line-height: 1.4;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+/* .sheet__body */
+.sheet__body {
+  padding-top: clamp(40px, 6vw, 96px);
+}
+
+/* Below the width where two columns leave the title a decent measure, the
+   intro drops under it. */
+@media (max-width: 64em) {
+  .sheet__head { grid-template-columns: minmax(0, 1fr); }
+  .sheet__intro { grid-column: 1; }
+}

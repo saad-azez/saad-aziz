@@ -1,0 +1,52 @@
+ .hero { position: relative; min-height: 100svh; overflow: hidden; isolation: isolate; background: var(--ground); }
+.hero__title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.hero__canvas { position: absolute; inset: 0; z-index: 0; display: block; width: 100%; height: 100svh; }
+.hero__frame { position: relative; z-index: 2; display: grid; grid-template-rows: auto 1fr auto; min-height: 100svh; padding: clamp(24px,4vh,48px) var(--frame-inset) clamp(28px,4vh,48px); visibility: hidden; }
+.hero__frame--visible { visibility: visible; }
+.hero__top { position: relative; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding-bottom: 22px; }
+.hero__mark { position: relative; display: block; width: 52px; height: 52px; color: var(--ink); perspective: 260px; }
+.hero__mark-letters, .hero__mark-ring { position: absolute; inset: 0; display: block; }
+.hero__mark-ring { transform-style: preserve-3d; transition: color .3s; }
+.hero__mark:hover .hero__mark-ring { color: var(--accent); }
+.hero__mark svg { width: 100%; height: 100%; display: block; }
+.hero__mark-letters svg { transform: scale(.86); }
+.hero__meta { font-size: 11px; color: var(--ink-2); letter-spacing: .04em; font-variant-numeric: tabular-nums; margin: 0; }
+.hero__nav { display: flex; justify-self: end; gap: 30px; font-size: 12px; }
+.hero__nav a { text-decoration: none; color: var(--ink); transition: color .2s; }
+.hero__nav a:hover { color: var(--accent); }
+.hero__rule { position: absolute; left: 0; right: 0; height: 1px; background: var(--rule); transform: scaleX(0); transform-origin: left; }
+.hero__rule--top { bottom: 0; } .hero__rule--bottom { top: 0; }
+.hero__word { min-height: 220px; }
+.hero__bottom { position: relative; display: grid; grid-template-columns: 1.2fr 1fr; gap: 8vw; align-items: end; padding-top: 28px; }
+.hero__discipline { margin: 0 0 16px; color: var(--ink-2); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.hero__headline h2 { font-family: var(--font-editorial); font-weight: 400; font-size: clamp(32px,3.7vw,62px); line-height: 1.06; letter-spacing: -.035em; margin: 0; }
+.hero__headline em { font-style: normal; color: var(--accent); }
+.hero__intro { max-width: 370px; justify-self: end; width: 100%; }
+.hero__intro > p { font-size: 14px; line-height: 1.75; color: var(--ink-2); margin: 0 0 24px; }
+.hero__actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.text-link { display: inline-flex; align-items: center; gap: 24px; padding-bottom: 7px; border-bottom: 1px solid var(--ink); color: var(--ink); font-size: 12px; font-weight: 600; text-decoration: none; }
+.text-link span { transition: transform .25s; } .text-link:hover span { transform: translate(3px,-3px); }
+.hero__replay { border: 1px solid var(--rule); border-radius: 50%; background: transparent; color: var(--ink); width: 40px; height: 40px; font-size: 23px; cursor: pointer; transition: border-color .2s,opacity .2s; }
+.hero__replay:hover { border-color: var(--accent); } .hero__replay:disabled { opacity: .3; cursor: default; }
+.hero__mark, .hero__meta, .hero__nav, .hero__headline, .hero__intro { opacity: 0; visibility: hidden; }
+@media (max-width: 700px) {
+ .hero__top { grid-template-columns: 1fr auto; padding-bottom: 16px; }
+ .hero__mark { width: 44px; height: 44px; }
+ .hero__meta { display: none; }
+ .hero__nav { gap: 20px; font-size: 11px; }
+ .hero__bottom { grid-template-columns: 1fr; gap: 18px; padding-top: 20px; }
+ .hero__headline h2 { font-size: clamp(30px,7.2vw,45px); }
+ .hero__discipline { font-size: 8px; margin-bottom: 10px; }
+ .hero__intro { max-width: none; }
+ .hero__intro > p { font-size: 12px; line-height: 1.65; max-width: 36ch; margin-bottom: 14px; }
+ .hero__word { min-height: 190px; }
+ .hero__frame { padding-bottom: 24px; }
+ .text-link { font-size: 11px; gap: 12px; }
+}
+@media (max-width: 700px) and (max-height: 670px) {
+ .hero__word { min-height: 165px; }
+ .hero__headline h2 { font-size: 28px; }
+ .hero__discipline { display: none; }
+ .hero__intro > p { margin-bottom: 10px; }
+ .hero__bottom { gap: 12px; padding-top: 16px; }
+}

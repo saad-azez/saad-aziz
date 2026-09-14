@@ -1,0 +1,449 @@
+/**
+ * The sketched clock — src/components/hero/SketchClock.jsx
+ *
+ * Only the resting styles live here. Everything that moves — the first
+ * reveal, the ringing, the hover scale, the hands, the curve of labels, the
+ * dwell underline and the portal — is a GSAP tween in the component, so a
+ * state is never declared in two places.
+ *
+ * WEBFLOW HANDOFF
+ * The instrument is an embed (inline SVG + script); these classes style the
+ * frame around it. See WEBFLOW.md.
+ */
+
+/* .hero__clock
+   The whole instrument, sitting where the text clock sat. It keeps .hero__meta
+   (Hero.css) so the header's entrance and the phone breakpoint treat it
+   exactly as they treated the text. The box is the size of the monogram, so
+   the header row does not grow. */
+.hero__clock {
+  position: relative;
+  z-index: 4;
+  width: 52px;
+  height: 52px;
+  margin: 0;
+  color: var(--ink);
+}
+/* Ink, like the mark beside it. `.hero__meta` in Hero.css loads after this
+   file and would otherwise paint the whole clock in the muted --ink-2. */
+.hero__meta.hero__clock { color: var(--ink); }
+
+/* An invisible halo, wider while hovered, so the pointer can travel from the
+   ring down to the curved labels without the hover dropping in between. */
+.hero__clock::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.hero__clock:hover::before,
+.hero__clock:focus-within::before {
+  inset: -14px -48px -34px;
+}
+.hero__clock--open::before {
+  inset: 0;
+}
+
+/* .hero__clock-dial — the face is a button: it opens the portal. */
+.hero__clock-dial {
+  position: relative;
+  z-index: 3; /* above the sweep overlay, below the section copy */
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.hero__clock-dial:focus-visible {
+  outline-offset: 8px;
+}
+
+/* The drawing overflows its box on purpose: the curve of labels sits outside
+   the sunburst, and the whole thing grows a third under the pointer. */
+.hero__clock-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* The strokes. Colour comes from `currentColor` on the group; the second hand
+   alone is wine. The ring is the monogram's, filled, not stroked. */
+.hero__clock-ring { fill: currentColor; }
+.hero__clock-tick { opacity: .9; }
+.hero__clock-pin { fill: currentColor; }
+.hero__clock-hand--second { stroke: var(--accent); }
+
+/* .hero__clock-halo — day or night in Karachi, said without words: a patch
+   of light by day, a soft shadow by night, behind the face. Script moves it
+   round the face with the sun and lets it breathe. */
+.hero__clock-halo {
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 50%;
+  width: 150px;
+  height: 150px;
+  margin: -75px 0 0 -75px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(closest-side, var(--halo-light), transparent 72%);
+}
+.hero__clock--night .hero__clock-halo {
+  background: radial-gradient(closest-side, var(--halo-shade), transparent 72%);
+}
+
+/* .hero__clock-bend — the header's line dipping out of the names' way. Script
+   places it over a masked-out stretch of the rule and draws the bowl; hidden
+   at rest, when the rule is whole again. */
+.hero__clock-bend {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+  visibility: hidden;
+}
+.hero__clock-bend-line {
+  fill: none;
+  stroke: var(--rule);
+  /* A touch over 1px: a curve spreads its ink across two pixel rows, so at
+     exactly 1px its slopes read lighter than the straight 1px rule beside it. */
+  stroke-width: 1.3;
+}
+
+/* .hero__clock-waves — the ringing, drawn rather than shaken: little arcs of
+   vibration off both top corners, the way an old twin-bell alarm clock is
+   drawn ringing. The clock never moves; script pulses the arcs. */
+.hero__clock-wave {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* .hero__clock-stops — the sections, on the lower arc. Each is an SVG anchor;
+   GSAP shows one at a time and only that one accepts the pointer. */
+.hero__clock-stops {
+  font-family: var(--font-editorial);
+  font-size: 27px; /* drawing units: ~16px on screen once the dial has grown */
+  letter-spacing: .03em;
+  fill: var(--ink-2);
+}
+.hero__clock-stop {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  outline: none;
+}
+.hero__clock-stop text { fill: inherit; }
+.hero__clock-stop:hover,
+.hero__clock-stop:focus-visible { fill: var(--accent); }
+
+/* .hero__clock-stop-line — drawn by hand under a word the pointer rests on.
+   Its path is measured and set by script; GSAP draws it in. */
+.hero__clock-stop-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* .hero__clock-label — the city, beneath. Steps aside while the curve shows. */
+.hero__clock-label {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: -40px;
+  right: -40px;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: .08em;
+  color: var(--ink-2);
+  pointer-events: none;
+}
+
+/* .hero__clock-list — reduced motion: the sections as a plain row where the
+   city was, no cycle. Rendered instead of the curve. */
+.hero__clock-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+  font-family: var(--font-editorial);
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+  visibility: hidden;
+}
+.hero__clock:hover .hero__clock-list,
+.hero__clock:focus-within .hero__clock-list {
+  visibility: visible;
+}
+.hero__clock-list a {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.hero__clock-list a:hover,
+.hero__clock-list a:focus-visible {
+  color: var(--accent);
+}
+
+/* .hero__clock-portal — the sweep overlay: the veil and the hour lines,
+   fixed to the viewport, BENEATH the dial (which is the big clock too) and
+   above the page. Hidden until opened. */
+.hero__clock-portal {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  opacity: 0;
+  visibility: hidden;
+  color: var(--ink);
+}
+
+/* .hero__clock-veil — the ground, swept over the page by the clock's own
+   hand: a conic mask that opens from twelve o'clock (--sweep, 0 → 360deg),
+   centred where the ring is (--cx, --cy). Script drives the three variables. */
+.hero__clock-veil {
+  position: absolute;
+  inset: 0;
+  background: var(--ground);
+  -webkit-mask-image: conic-gradient(from 0deg at var(--cx, 50%) var(--cy, 50%), #000 0deg, #000 var(--sweep, 0deg), transparent var(--sweep, 0deg), transparent 360deg);
+  mask-image: conic-gradient(from 0deg at var(--cx, 50%) var(--cy, 50%), #000 0deg, #000 var(--sweep, 0deg), transparent var(--sweep, 0deg), transparent 360deg);
+}
+
+/* .hero__clock-lines — the sweeping hand, and the twelve hour lines run out
+   to the edges of the viewport as drafting hairlines once the sweep is done. */
+.hero__clock-lines {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.hero__clock-ray {
+  stroke: var(--rule);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.hero__clock-sweep-box { fill: none; stroke: none; }
+.hero__clock-sweep-hand {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-linecap: round;
+  opacity: .7;
+}
+/* The disc behind the copy of the big clock. Part of the one face, hidden
+   at rest; it fades in as the clock grows and out as it shrinks. */
+.hero__clock-fill {
+  fill: var(--ground-raise);
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* The sections, inside the ring — fixed to the viewport, above the clock.
+   Placed by script at the middle of the viewport; sizes follow --r1, the
+   ring's radius in px. */
+.hero__clock-portal-body {
+  position: fixed;
+  z-index: 4;
+  text-align: center;
+  opacity: 0;
+  visibility: hidden;
+}
+/* Read by screen readers only: where and what time it is. */
+.hero__clock-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* .hero__clock-legend — inside the big clock's ring: the city along the top,
+   the time zone along the bottom. Sized in drawing units, so it grows with
+   the clock; hidden at rest. */
+.hero__clock-legend {
+  font-family: var(--font-body);
+  font-size: 2px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  fill: var(--ink-2);
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* .hero__clock-portal-row — the hour card, the sections, the minute card: one
+   row, centred on the ring. */
+.hero__clock-portal-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--r1, 300px) * .08);
+}
+
+/* .hero__clock-card — a flip card in the manner of Fliqlo. Ink card, ground
+   figures, a hairline split; script sets the figures and folds the leaves. */
+.hero__clock-card {
+  position: relative;
+  flex: none;
+  width: calc(var(--r1, 300px) * .4);
+  height: calc(var(--r1, 300px) * .46);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: calc(var(--r1, 300px) * .3);
+  line-height: calc(var(--r1, 300px) * .46);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+  color: var(--ground);
+  perspective: 600px;
+  opacity: 0;
+  visibility: hidden;
+}
+.hero__clock-card-half {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50%;
+  overflow: hidden;
+  background: var(--ink);
+  backface-visibility: hidden;
+}
+.hero__clock-card-half--top {
+  top: 0;
+  border-radius: calc(var(--r1, 300px) * .045) calc(var(--r1, 300px) * .045) 0 0;
+  transform-origin: 50% 100%;
+}
+.hero__clock-card-half--bottom {
+  bottom: 0;
+  border-radius: 0 0 calc(var(--r1, 300px) * .045) calc(var(--r1, 300px) * .045);
+  transform-origin: 50% 0;
+}
+.hero__clock-card-half > span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(var(--r1, 300px) * .46);
+  text-align: center;
+}
+.hero__clock-card-half--bottom > span {
+  top: auto;
+  bottom: 0;
+}
+.hero__clock-card-leaf {
+  z-index: 2;
+  opacity: 0;
+  visibility: hidden;
+}
+.hero__clock-card::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: max(1px, calc(var(--r1, 300px) * .006));
+  transform: translateY(-50%);
+  background: var(--ground);
+}
+.hero__clock-card-meridiem {
+  position: absolute;
+  z-index: 4;
+  left: calc(var(--r1, 300px) * .035);
+  top: calc(var(--r1, 300px) * .03);
+  font-size: calc(var(--r1, 300px) * .05);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: .04em;
+  color: var(--ground);
+  opacity: .75;
+}
+
+/* .hero__clock-portal-nav — the four sections, together, in the middle of
+   the ring: the whole navigation at once. */
+.hero__clock-portal-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--r1, 300px) * .02);
+  font-family: var(--font-editorial);
+  font-size: clamp(26px, calc(var(--r1, 300px) * .14), 56px);
+  line-height: 1.12;
+  letter-spacing: -.02em;
+}
+.hero__clock-portal-nav a {
+  position: relative;
+  color: var(--ink);
+  text-decoration: none;
+  transition: color .2s;
+}
+.hero__clock-portal-nav a:hover,
+.hero__clock-portal-nav a:focus-visible { color: var(--accent); }
+
+/* Under the pointer a name splits like a flip card: a hairline in the face's
+   own colour draws across its middle from the left, so the letters read as
+   two flaps — the same split the hour and minute cards carry, at the same
+   weight. On the way out it withdraws to the right. */
+.hero__clock-portal-nav a::after {
+  content: '';
+  position: absolute;
+  left: -.06em;
+  right: -.06em;
+  top: .62em;
+  height: max(1px, calc(var(--r1, 300px) * .006));
+  background: var(--ground-raise);
+  transform: scaleX(0);
+  transform-origin: right center;
+  transition: transform .35s cubic-bezier(.65, 0, .35, 1);
+  pointer-events: none;
+}
+.hero__clock-portal-nav a:hover::after,
+.hero__clock-portal-nav a:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: left center;
+}
+
+.hero__clock-portal-close {
+  /* Placed by script just outside the ring at half past one. */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: var(--close-size, 40px);
+  height: var(--close-size, 40px);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--ground-raise);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: calc(var(--close-size, 40px) * .55);
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color .2s, color .2s;
+}
+.hero__clock-portal-close:hover,
+.hero__clock-portal-close:focus-visible { border-color: var(--accent); color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero__clock-portal-nav a,
+  .hero__clock-portal-nav a::after,
+  .hero__clock-portal-close { transition: none; }
+}

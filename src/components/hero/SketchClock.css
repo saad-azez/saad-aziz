@@ -62,6 +62,12 @@
   outline-offset: 8px;
 }
 
+/* [data-big] — set by script while the clock is open, and until it has shrunk
+   home. The drawing is then most of the viewport, and nothing in it is a
+   button, so it shows the plain arrow. The things that are clickable — the
+   section links and the × — keep the pointer, which they set themselves. */
+.hero__clock[data-big] .hero__clock-dial { cursor: default; }
+
 /* The drawing overflows its box on purpose: the curve of labels sits outside
    the sunburst, and the whole thing grows a third under the pointer. */
 .hero__clock-svg {
@@ -77,25 +83,6 @@
 .hero__clock-tick { opacity: .9; }
 .hero__clock-pin { fill: currentColor; }
 .hero__clock-hand--second { stroke: var(--accent); }
-
-/* .hero__clock-halo — day or night in Karachi, said without words: a patch
-   of light by day, a soft shadow by night, behind the face. Script moves it
-   round the face with the sun and lets it breathe. */
-.hero__clock-halo {
-  position: absolute;
-  z-index: -1;
-  left: 50%;
-  top: 50%;
-  width: 150px;
-  height: 150px;
-  margin: -75px 0 0 -75px;
-  border-radius: 50%;
-  pointer-events: none;
-  background: radial-gradient(closest-side, var(--halo-light), transparent 72%);
-}
-.hero__clock--night .hero__clock-halo {
-  background: radial-gradient(closest-side, var(--halo-shade), transparent 72%);
-}
 
 /* .hero__clock-bend — the header's line dipping out of the names' way. Script
    places it over a masked-out stretch of the rule and draws the bowl; hidden
@@ -429,7 +416,7 @@
   height: var(--close-size, 40px);
   margin: 0;
   padding: 0;
-  border: 1px solid var(--rule);
+  border: 0;
   border-radius: 50%;
   background: var(--ground-raise);
   color: var(--ink);
@@ -437,13 +424,93 @@
   font-size: calc(var(--close-size, 40px) * .55);
   line-height: 1;
   cursor: pointer;
-  transition: border-color .2s, color .2s;
+  transition: color .2s;
 }
 .hero__clock-portal-close:hover,
-.hero__clock-portal-close:focus-visible { border-color: var(--accent); color: var(--accent); }
+.hero__clock-portal-close:focus-visible { color: var(--accent); }
 
 @media (prefers-reduced-motion: reduce) {
   .hero__clock-portal-nav a,
   .hero__clock-portal-nav a::after,
   .hero__clock-portal-close { transition: none; }
+}
+
+/* The coin under the floating clock, and the home-bar probe: nothing on a
+   desktop. */
+.hero__clock-coin { display: none; }
+.hero__clock-safe {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  height: env(safe-area-inset-bottom, 0px);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* --- Phones ------------------------------------------------------------------
+   The header drops to two columns here (Hero.css) and hides .hero__meta. The
+   clock comes back into the empty centre of the header, at the mark's size and
+   out of the grid, so the header row stays exactly as it was. No hover halo,
+   no city label (the city is inside the opened ring). */
+@media (max-width: 700px) {
+  .hero__meta.hero__clock {
+    display: block;
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 44px;
+    height: 44px;
+    margin-left: -22px;
+  }
+  .hero__clock::before,
+  .hero__clock-label { display: none; }
+
+  /* Floating, once the header has scrolled away: fixed at the bottom centre,
+     on a coin so it reads over whatever is beneath. FLOAT_GAP in the script. */
+  .hero__meta.hero__clock[data-float] {
+    position: fixed;
+    top: auto;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+  .hero__clock[data-float] .hero__clock-coin {
+    display: block;
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    top: 50%;
+    width: 64px;
+    height: 64px;
+    margin: -32px 0 0 -32px;
+    border-radius: 50%;
+    background: var(--ground-raise);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .14);
+  }
+
+  /* Opened: the two cards side by side, the four names beneath, centred in
+     the ring. Sizes follow --r1, the ring's radius. */
+  .hero__clock-portal-row {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-areas: "hour minute" "nav nav";
+    justify-content: center;
+    column-gap: calc(var(--r1, 130px) * .06);
+    row-gap: calc(var(--r1, 130px) * .09);
+  }
+  .hero__clock-card--hour { grid-area: hour; }
+  .hero__clock-card--minute { grid-area: minute; }
+  .hero__clock-card {
+    width: calc(var(--r1, 130px) * .42);
+    height: calc(var(--r1, 130px) * .48);
+    font-size: calc(var(--r1, 130px) * .32);
+    line-height: calc(var(--r1, 130px) * .48);
+  }
+  .hero__clock-card-half > span { height: calc(var(--r1, 130px) * .48); }
+  .hero__clock-card-meridiem { font-size: calc(var(--r1, 130px) * .075); }
+  .hero__clock-portal-nav {
+    grid-area: nav;
+    gap: calc(var(--r1, 130px) * .015);
+    font-size: max(20px, calc(var(--r1, 130px) * .16));
+  }
+  .hero__clock-legend { font-size: 3.2px; }
 }

@@ -4,8 +4,9 @@ import { DrawSVGPlugin } from 'gsap/DrawSVGPlugin';
 import { EASE, reducedMotion } from '../../brand/motion.js';
 import { useKarachiTime } from '../../lib/useKarachiTime.js';
 import { PERSON } from '../../content/site.js';
-import { sunState } from '../../lib/sun.js';
+import { sectionLink } from '../../lib/sectionLink.js';
 import monogramRing from '../../assets/monogram-ring.svg?raw';
+import RingButton, { RingBorder } from '../ui/RingButton.jsx';
 import './SketchClock.css';
 
 gsap.registerPlugin(DrawSVGPlugin);
@@ -23,11 +24,6 @@ gsap.registerPlugin(DrawSVGPlugin);
  * header and the big clock in the middle of the viewport are the same SVG,
  * scaled and moved by GSAP; nothing is swapped, cross-faded or duplicated at
  * any point, so it cannot ever read as two clocks.
- *
- * Behind it, a halo says whether it is day or night at home without a
- * word: a patch of sunlight by day, a soft shadow by night, travelling round
- * the face from east to west as the day (or the night) goes on. The page's
- * palette follows the same clock (see brand/scheme.js).
  *
  * It is also the navigation, and it says so the way an alarm clock does — as
  * a cartoon draws one ringing: little arcs of vibration pulse off both top
@@ -52,23 +48,47 @@ gsap.registerPlugin(DrawSVGPlugin);
  *         hairlines go first, the ring shrinks home with its hands returning,
  *         and only then does the hand sweep the page back in.
  *
+ * Phone   (700px wide or less) there is no hover and no room under the clock
+ *         for the curved names or the bending line. The clock takes the
+ *         empty centre of the header at the mark's size and keeps ringing; a
+ *         tap opens it. Once the header has scrolled away it floats at the
+ *         bottom centre on a small coin: it sinks away while the page scrolls
+ *         quickly and comes back, ringing once, as the scroll slows or stops.
+ *         Opened, the ring is sized to the width, the two cards sit side by
+ *         side with the names beneath, and the × waits at the bottom centre.
+ *
  * Reduced motion: no ringing, no cycle (the labels become a plain row under
  * the clock), no expansion tween — every state jumps straight to its end.
  */
 
-/** The stations, in the order they arrive. */
+/** The stations, in the order they arrive. A `section` is a place on the page
+    and goes through sectionLink — never a `#` in the URL (lib/sectionLink.js);
+    an `href` is somewhere else entirely. */
 const STOPS = [
-  { label: 'About', href: '#about' },
-  { label: 'Work', href: '#work' },
-  { label: 'Contact', href: '#contact' },
+  { label: 'About', section: 'about' },
+  { label: 'Work', section: 'work' },
+  { label: 'Contact', section: 'contact' },
   { label: 'Let’s talk', href: `mailto:${PERSON.email}` },
 ];
+
+/** A station's link props: scrolls in place for a section, follows an href otherwise. */
+const stopLink = (stop, then) => (stop.section
+  ? sectionLink(stop.section, then)
+  : { href: stop.href, onClick: then });
 
 /* The time zone, as the system names it: "Pakistan Standard Time", "UTC+5". */
 const zonePart = style => new Intl.DateTimeFormat('en-GB', { timeZone: PERSON.timezone, timeZoneName: style })
   .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value ?? '';
 const ZONE = zonePart('long');
 const OFFSET = zonePart('shortOffset').replace('GMT', 'UTC');
+
+/* Phones — the same width at which the header drops to two columns (Hero.css). */
+const COMPACT = '(max-width: 700px)';
+const compactQuery = typeof window !== 'undefined' ? window.matchMedia(COMPACT) : null;
+const isCompact = () => !!compactQuery?.matches;
+/* On a phone the floating clock and the × sit this far above the bottom edge
+   (plus the home-bar inset). Keep in step with SketchClock.css. */
+const FLOAT_GAP = 20;
 
 /* Timing of the curved labels, in seconds: arrive, hold, leave, and how long
    a pointer rests on a label before the clock takes it as interest. */
@@ -100,6 +120,10 @@ const TEXT_R = 90;
 // its size towards the glyphs' tops (see TEXT_R), so these are checked in pixels.
 const LEGEND_TOP_R = 34;
 const LEGEND_BOTTOM_R = 36;
+// On a phone the legend is set larger (3 units, not 2) so it stays legible on
+// a small ring; its arcs move to keep the bigger letters off the ring.
+const LEGEND_TOP_R_COMPACT = 33;
+const LEGEND_BOTTOM_R_COMPACT = 35.3;   // the time zone's letters keep 3px or more off the ring's inner edge
 const VB = 112;        // the viewBox — cropped to the sunburst; the rest overflows
 const C = VB / 2;
 const ORIGIN = `${C} ${C}`;
@@ -243,6 +267,8 @@ function drawFace(c) {
     arc: textArc(c),
     legendTop: legendArc(c, LEGEND_TOP_R, true),
     legendBottom: legendArc(c, LEGEND_BOTTOM_R, false),
+    legendTopCompact: legendArc(c, LEGEND_TOP_R_COMPACT, true),
+    legendBottomCompact: legendArc(c, LEGEND_BOTTOM_R_COMPACT, false),
     waves: WAVE_SIDES.map(side => ({ side, arcs: waveArcs(side, mulberry32(side.name === 'left' ? 21 : 22)) })),
   };
 }
@@ -372,7 +398,7 @@ function runFlipCards(body) {
 export default function SketchClock({ draw = false }) {
   const time = useKarachiTime();
   const [open, setOpen] = useState(false);
-  const [night, setNight] = useState(() => sunState().night);
+  const [compact, setCompact] = useState(isCompact);
   const rootRef = useRef(null);
   const dialRef = useRef(null);
   const svgRef = useRef(null);
@@ -383,6 +409,8 @@ export default function SketchClock({ draw = false }) {
   const wavesRef = useRef(null);
   const bendRef = useRef(null);
   const openGeom = useRef(null);
+  const floatRef = useRef(null);
+  const safeRef = useRef(null);
   const portalTl = useRef(null);
   const closing = useRef(false);
   const viaKey = useRef(false);
@@ -390,23 +418,20 @@ export default function SketchClock({ draw = false }) {
 
   const geo = useMemo(() => drawFace(C), []);
 
-  // The hands, and the halo. Hour and minute are set once a minute, on the
-  // minute; the second hand is a 60s tween on repeat whose progress is the
-  // current second, re-seated whenever the tab comes back so it cannot drift.
-  // The halo moves with the sun: east at dawn, overhead at noon, west at dusk,
-  // and the same track again through the night as a shadow.
+  // Phone or not, kept current as the window is resized or rotated.
+  useEffect(() => {
+    if (!compactQuery) return;
+    const onChange = () => setCompact(compactQuery.matches);
+    compactQuery.addEventListener('change', onChange);
+    return () => compactQuery.removeEventListener('change', onChange);
+  }, []);
+
+  // The hands. Hour and minute are set once a minute, on the minute; the
+  // second hand is a 60s tween on repeat whose progress is the current second,
+  // re-seated whenever the tab comes back so it cannot drift.
   useLayoutEffect(() => {
     const root = rootRef.current;
     const context = gsap.context(() => {
-      const halo = root.querySelector('.hero__clock-halo');
-      const HALO_R = 30;
-      const place = (first) => {
-        const sun = sunState();
-        setNight(sun.night);
-        const t = Math.PI + Math.min(1, Math.max(0, sun.progress)) * Math.PI;
-        gsap.to(halo, { x: Math.cos(t) * HALO_R, y: Math.sin(t) * HALO_R, duration: first || reducedMotion ? 0 : 2, ease: 'sine.inOut', overwrite: 'auto' });
-      };
-      if (!reducedMotion) gsap.to(halo, { scale: 1.12, opacity: 0.72, duration: 3.8, ease: 'sine.inOut', repeat: -1, yoyo: true });
       const hour = root.querySelector('.hero__clock-hand--hour');
       const minute = root.querySelector('.hero__clock-hand--minute');
       const second = root.querySelector('.hero__clock-hand--second');
@@ -426,7 +451,6 @@ export default function SketchClock({ draw = false }) {
         turn(hour, a.h, first);
         turn(minute, a.m, first);
         sweep.progress((s + ms / 1000) / 60).play();
-        place(first);
       };
       seat(true);
       let interval = 0;
@@ -489,7 +513,9 @@ export default function SketchClock({ draw = false }) {
           tl = gsap.to(arcs, { autoAlpha: 0, duration: 0.25, ease: 'power1.out', overwrite: 'auto' });
         }
       };
-      wavesRef.current = { set };
+      // Strike the bells now: the next burst starts at once, not after the pause.
+      const kick = () => { if (mode === 'ring') tl?.restart(); };
+      wavesRef.current = { set, kick };
       return () => { wavesRef.current = null; };
     }, rootRef);
     return () => context.revert();
@@ -523,6 +549,9 @@ export default function SketchClock({ draw = false }) {
       let hot = false;
       const sync = () => {
         if (root.classList.contains('hero__clock--open') || closing.current) return;
+        // A phone has no hover (a tap fires a brief one): nothing grows or
+        // steps aside, and the clock simply goes back to ringing.
+        if (isCompact()) { wavesRef.current?.set('ring'); return; }
         const d = reducedMotion ? 0 : 0.5;
         gsap.to(dialEl, { scale: hot ? 1.3 : 1, duration: d, ease: EASE.arrive, overwrite: 'auto' });
         // The city and the section names share the space under the clock and
@@ -696,7 +725,7 @@ export default function SketchClock({ draw = false }) {
         later(IN + HOLD);
       };
       const enter = () => {
-        if (hovering || root.classList.contains('hero__clock--open') || closing.current) return;
+        if (isCompact() || hovering || root.classList.contains('hero__clock--open') || closing.current) return;
         hovering = true;
         // The line dips first, so a name never lands on it.
         bendRef.current?.set(true);
@@ -769,7 +798,6 @@ export default function SketchClock({ draw = false }) {
     const body = bodyRef.current;
     if (!root || !button || !svg || !overlay || !body) return;
 
-    const halo = root.querySelector('.hero__clock-halo');
     const label = root.querySelector('.hero__clock-label');
     const ticks = svg.querySelectorAll('.hero__clock-tick');
     const hands = svg.querySelectorAll('.hero__clock-hand, .hero__clock-pin');
@@ -790,10 +818,11 @@ export default function SketchClock({ draw = false }) {
     const settled = () => {
       hoverRef.current?.sync();
       if (root.matches(':hover')) cycleRef.current?.enter();
+      floatRef.current?.recheck();
     };
 
     if (!open) {
-      if (!portalTl.current) { overlay.inert = true; body.inert = true; return; }
+      if (!portalTl.current) { overlay.inert = true; body.inert = true; delete root.dataset.big; return; }
       portalTl.current.kill();
       const wasInside = body.contains(document.activeElement);
       overlay.inert = true;
@@ -806,6 +835,7 @@ export default function SketchClock({ draw = false }) {
       closing.current = true;
       const done = () => {
         closing.current = false;
+        delete root.dataset.big;
         settled();
         if (returnFocus) button.focus({ preventScroll: true });
       };
@@ -844,12 +874,15 @@ export default function SketchClock({ draw = false }) {
         .to(veil, { '--sweep': '0deg', duration: 0.75 }, 0.9)
         .to(arm, { rotation: 0, duration: 0.75 }, 0.9)
         .to(arm, { autoAlpha: 0, duration: 0.2, ease: EASE.blend }, 1.5)
-        .to([halo, waves], { autoAlpha: 1, duration: 0.25, ease: EASE.blend }, 1.55);
+        .to(waves, { autoAlpha: 1, duration: 0.25, ease: EASE.blend }, 1.55);
       portalTl.current = tl;
       if (reducedMotion) tl.progress(1);
       return;
     }
 
+    // The big clock is up (and stays marked so until it is home again): its
+    // drawing covers much of the viewport and must not wear the dial's pointer.
+    root.dataset.big = '';
     cycleRef.current?.stop();
     wavesRef.current?.set('still');
     portalTl.current?.kill();
@@ -872,10 +905,19 @@ export default function SketchClock({ draw = false }) {
     const W = document.documentElement.clientWidth;
     const H = document.documentElement.clientHeight;
     const R = Math.hypot(W, H);
-    // The sunburst reaches 1.4 r past the centre: this keeps it clear of the edges.
-    const r1 = Math.max(150, Math.min(W * 0.28, H * 0.33, 400));
+    // The sunburst reaches 1.4 r past the centre: this keeps it clear of the
+    // edges. On a phone the width decides, and the ring sits no lower than
+    // leaves the bottom centre free for the ×.
+    const compactNow = isCompact();
+    const safeBottom = safeRef.current?.offsetHeight || 0;
+    const r1 = compactNow
+      ? Math.max(110, Math.min((W / 2 - 6) / 1.4, H * 0.3))
+      : Math.max(150, Math.min(W * 0.28, H * 0.33, 400));
     const cx1 = W / 2;
-    const cy1 = H / 2;
+    const cy1 = compactNow
+      ? Math.min(H / 2, H - (FLOAT_GAP + safeBottom + 44 + 14) - r1 * 1.4)
+      : H / 2;
+    const closeTop = H - FLOAT_GAP - safeBottom - 44;       // the phone ×'s top edge
     const s1 = r1 / (RING * unit);
     root.style.setProperty('--r1', `${r1}px`);
     openGeom.current = { cx: cx1, cy: cy1, r: r1 };
@@ -883,11 +925,21 @@ export default function SketchClock({ draw = false }) {
     // is looked for, in the gap between the 1 and 2 o'clock ticks, clear of
     // everything else. It is placed from the centre of the dialog, which is
     // the centre of the ring.
-    const closeSize = Math.round(Math.min(44, Math.max(34, r1 * 0.13)));
-    const closeR = r1 * 1.035 + closeSize / 2;
-    root.style.setProperty('--close-size', `${closeSize}px`);
-    close.style.left = `calc(50% + ${(closeR * Math.SQRT1_2).toFixed(1)}px)`;
-    close.style.top = `calc(50% - ${(closeR * Math.SQRT1_2).toFixed(1)}px)`;
+    if (compactNow) {
+      // On a phone the × waits at the bottom centre — where a thumb already is,
+      // and where the floating clock itself sits.
+      const closeSize = 44;
+      const centreY = H - FLOAT_GAP - safeBottom - closeSize / 2;
+      root.style.setProperty('--close-size', `${closeSize}px`);
+      close.style.left = '50%';
+      close.style.top = `calc(50% + ${(centreY - cy1).toFixed(1)}px)`;
+    } else {
+      const closeSize = Math.round(Math.min(44, Math.max(34, r1 * 0.13)));
+      const closeR = r1 * 1.035 + closeSize / 2;
+      root.style.setProperty('--close-size', `${closeSize}px`);
+      close.style.left = `calc(50% + ${(closeR * Math.SQRT1_2).toFixed(1)}px)`;
+      close.style.top = `calc(50% - ${(closeR * Math.SQRT1_2).toFixed(1)}px)`;
+    }
     overlay.inert = false;
     body.inert = false;
 
@@ -909,8 +961,11 @@ export default function SketchClock({ draw = false }) {
       const len = Math.hypot(bx - ax, by - ay);
       const ux = (bx - ax) / len, uy = (by - ay) / len;
       const gap = r1 * 1.5 - Math.hypot(bx - cx1, by - cy1);   // start where the hairlines always started
+      // On a phone the × sits at the bottom centre, right on the 6 o'clock
+      // hairline's path: that one stops 10px short of it.
+      const reach = compactNow && uy > 0.9 ? Math.max(gap, (closeTop - 10 - by) / uy) : R;
       ray.setAttribute('x1', bx + ux * gap); ray.setAttribute('y1', by + uy * gap);
-      ray.setAttribute('x2', bx + ux * R); ray.setAttribute('y2', by + uy * R);
+      ray.setAttribute('x2', bx + ux * reach); ray.setAttribute('y2', by + uy * reach);
     });
     const pivot = arm.querySelector('rect');
     pivot.setAttribute('x', -R); pivot.setAttribute('y', -R); pivot.setAttribute('width', 2 * R); pivot.setAttribute('height', 2 * R);
@@ -944,7 +999,7 @@ export default function SketchClock({ draw = false }) {
     // after another once the ring is most of the way there.
     const tl = gsap.timeline({ defaults: { duration: 0.9, ease: 'power2.inOut' } });
     tl.to(waves, { autoAlpha: 0, duration: 0.15, ease: EASE.blend }, 0)
-      .to([halo, label], { autoAlpha: 0, duration: 0.25, ease: EASE.blend }, 0)
+      .to(label, { autoAlpha: 0, duration: 0.25, ease: EASE.blend }, 0)
       .to(veil, { '--sweep': '360deg', '--cx': `${cx1}px`, '--cy': `${cy1}px` }, 0)
       .to(sweep, { x: cx1, y: cy1 }, 0)
       .to(arm, { rotation: 360 }, 0)
@@ -978,7 +1033,93 @@ export default function SketchClock({ draw = false }) {
     return () => { tl.pause(); stopFlip(); };
   }, [open]);
 
-  // Escape closes it, and so does the ×, and so does a click outside the ring.
+  // Phones: once the header has scrolled out of view the clock floats at the
+  // bottom centre. While the page scrolls quickly it sinks out of the way; as
+  // the scroll slows, or a moment after it stops, it comes back and rings once.
+  // Back at the top, it is in the header again. Never while open or closing.
+  useEffect(() => {
+    const root = rootRef.current;
+    const header = root.closest('.hero__top');
+    const button = dialRef.current;
+    const coin = root.querySelector('.hero__clock-coin');
+    if (!header || !button || !coin) return;
+    const targets = [button, coin];
+    const HIDE_SPEED = 0.25;   // px per ms: faster than this, it sinks away
+    const SHOW_SPEED = 0.12;   // slower than this, it comes back
+    const QUIET = 160;         // ms without a scroll event counts as stopped
+    let headerVisible = true, floating = false, shown = true;
+    let lastY = window.scrollY, lastT = performance.now(), lastScroll = 0, speed = 0, travelled = 0, raf = 0;
+    const busy = () => root.classList.contains('hero__clock--open') || closing.current;
+
+    const show = () => {
+      if (shown) return;
+      shown = true;
+      travelled = 0;
+      gsap.to(targets, { y: 0, autoAlpha: 1, duration: reducedMotion ? 0 : 0.45, ease: EASE.arrive, overwrite: 'auto' });
+      wavesRef.current?.kick?.();
+    };
+    const hide = () => {
+      if (!shown || reducedMotion || root.contains(document.activeElement)) return;
+      shown = false;
+      gsap.to(targets, { y: 96, autoAlpha: 0, duration: 0.28, ease: EASE.leave, overwrite: 'auto' });
+    };
+    const watch = () => {
+      if (raf) return;
+      const step = () => {
+        const quiet = performance.now() - lastScroll;
+        if (floating && (quiet > QUIET || speed < SHOW_SPEED)) show();
+        if (!floating || quiet > QUIET) { raf = 0; speed = 0; return; }
+        raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    };
+    const setFloating = on => {
+      if (on === floating || busy()) return;
+      floating = on;
+      gsap.killTweensOf(targets);
+      // An attribute, not a class: React rewrites className on every render
+      // (the time ticks every 15s), which would drop the floating state.
+      root.toggleAttribute('data-float', on);
+      if (on && !reducedMotion) {
+        // It arrives at the bottom out of sight, and rises as the scroll settles.
+        gsap.set(targets, { y: 96, autoAlpha: 0 });
+        shown = false;
+        watch();
+      } else {
+        gsap.set(targets, { y: 0, autoAlpha: 1 });
+        shown = true;
+      }
+    };
+    const recheck = () => setFloating(isCompact() && !headerVisible);
+    const onScroll = () => {
+      const now = performance.now();
+      const y = window.scrollY;
+      const dy = Math.abs(y - lastY);
+      speed = speed * 0.6 + (dy / Math.max(1, now - lastT)) * 0.4;
+      lastY = y;
+      lastT = now;
+      lastScroll = now;
+      if (!floating) return;
+      travelled += dy;
+      if (shown && travelled > 24 && speed > HIDE_SPEED) hide();
+      watch();
+    };
+    const observer = new IntersectionObserver(([entry]) => { headerVisible = entry.isIntersecting; recheck(); });
+    observer.observe(header);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    compactQuery?.addEventListener('change', recheck);
+    floatRef.current = { recheck };
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', onScroll);
+      compactQuery?.removeEventListener('change', recheck);
+      cancelAnimationFrame(raf);
+      floatRef.current = null;
+    };
+  }, []);
+
+  // Escape closes it, and so does the ×, and so does a click outside the ring —
+  // except on the lamp, which switches the lights and leaves the clock open.
   // A click anywhere inside the ring — a card, the disc, the gap between two
   // names — does nothing, so a near-miss on a link never throws it shut.
   useEffect(() => {
@@ -986,6 +1127,9 @@ export default function SketchClock({ draw = false }) {
     const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); viaKey.current = true; setOpen(false); } };
     const onDown = e => {
       if (e.target.closest?.('.hero__clock-portal-close')) return;
+      // Anything marked as standing apart from the clock — the lamp — is not a
+      // click outside: using it leaves the clock exactly as it is.
+      if (e.target.closest?.('[data-keeps-clock-open]')) return;
       const g = openGeom.current;
       if (g && Math.hypot(e.clientX - g.cx, e.clientY - g.cy) <= g.r * 1.05) return;
       setOpen(false);
@@ -1001,15 +1145,21 @@ export default function SketchClock({ draw = false }) {
   const className = [
     'hero__meta hero__meta--centre hero__clock',
     open ? 'hero__clock--open' : '',
-    night ? 'hero__clock--night' : 'hero__clock--day',
+    compact ? 'hero__clock--compact' : '',
   ].filter(Boolean).join(' ');
 
   return (
     <div className={className} ref={rootRef}>
-      <span className="hero__clock-halo" aria-hidden="true" />
+      {/* The coin under the floating clock on a phone; and a probe that measures the home-bar inset. */}
+      <span className="hero__clock-coin" aria-hidden="true"><RingBorder shape="round" /></span>
+      <span className="hero__clock-safe" ref={safeRef} aria-hidden="true" />
       <svg className="hero__clock-bend" aria-hidden="true" focusable="false" width={BEND_HALF * 2 + 4} height={BEND_DEPTH + 2} viewBox={`0 0 ${BEND_HALF * 2 + 4} ${BEND_DEPTH + 2}`}>
         <path className="hero__clock-bend-line" d="" />
       </svg>
+      {/* The dial opens the clock and nothing else. While the clock is open or
+          closing, a click on its (big) drawing must not reopen it: a tap
+          outside the ring closes it on pointerdown, and that same tap's click
+          then lands here. */}
       <button
         type="button"
         className="hero__clock-dial"
@@ -1018,7 +1168,7 @@ export default function SketchClock({ draw = false }) {
         aria-expanded={open}
         aria-controls="hero-clock-portal"
         aria-label={`${PERSON.city}, ${time} local. Sections`}
-        onClick={() => { if (!open) setOpen(true); }}
+        onClick={() => { if (!open && !closing.current) setOpen(true); }}
       >
         <svg className="hero__clock-svg" ref={svgRef} viewBox={`0 0 ${VB} ${VB}`} focusable="false">
           <defs>
@@ -1029,6 +1179,8 @@ export default function SketchClock({ draw = false }) {
             <path id="hero-clock-arc" d={geo.arc} fill="none" />
             <path id="hero-clock-legend-top" d={geo.legendTop} fill="none" />
             <path id="hero-clock-legend-bottom" d={geo.legendBottom} fill="none" />
+            <path id="hero-clock-legend-top-compact" d={geo.legendTopCompact} fill="none" />
+            <path id="hero-clock-legend-bottom-compact" d={geo.legendBottomCompact} fill="none" />
           </defs>
           <Face geo={geo} c={C} />
           <g className="hero__clock-waves" aria-hidden="true">
@@ -1037,15 +1189,15 @@ export default function SketchClock({ draw = false }) {
             )))}
           </g>
           <g className="hero__clock-legend" aria-hidden="true">
-            <text textAnchor="middle"><textPath href="#hero-clock-legend-top" startOffset="50%">{PERSON.city}</textPath></text>
-            <text textAnchor="middle"><textPath href="#hero-clock-legend-bottom" startOffset="50%">{`${ZONE} · ${OFFSET}`}</textPath></text>
+            <text textAnchor="middle"><textPath href={compact ? '#hero-clock-legend-top-compact' : '#hero-clock-legend-top'} startOffset="50%">{PERSON.city}</textPath></text>
+            <text textAnchor="middle"><textPath href={compact ? '#hero-clock-legend-bottom-compact' : '#hero-clock-legend-bottom'} startOffset="50%">{`${ZONE} · ${OFFSET}`}</textPath></text>
           </g>
           {!reducedMotion && (
             <g className="hero__clock-stops">
               {STOPS.map((s) => {
                 const chars = Array.from(s.label);
                 return (
-                  <a key={s.label} className="hero__clock-stop" href={s.href} onClick={() => setOpen(false)}>
+                  <a key={s.label} className="hero__clock-stop" {...stopLink(s, () => setOpen(false))}>
                     <text textAnchor="middle">
                       <textPath href="#hero-clock-arc" startOffset="50%">
                         {chars.map((ch, j) => <tspan key={j}>{ch === ' ' ? ' ' : ch}</tspan>)}
@@ -1065,7 +1217,7 @@ export default function SketchClock({ draw = false }) {
       {reducedMotion && (
         <nav className="hero__clock-list" aria-label="Sections">
           {STOPS.map(s => (
-            <a key={s.label} href={s.href}>{s.label}</a>
+            <a key={s.label} {...stopLink(s)}>{s.label}</a>
           ))}
         </nav>
       )}
@@ -1094,12 +1246,12 @@ export default function SketchClock({ draw = false }) {
           <FlipCard kind="hour" />
           <nav className="hero__clock-portal-nav" aria-label="Sections">
             {STOPS.map(s => (
-              <a key={s.label} href={s.href} onClick={() => setOpen(false)}>{s.label}</a>
+              <a key={s.label} {...stopLink(s, () => setOpen(false))}>{s.label}</a>
             ))}
           </nav>
           <FlipCard kind="minute" />
         </div>
-        <button type="button" className="hero__clock-portal-close" aria-label="Close" onClick={() => setOpen(false)}>×</button>
+        <RingButton as="button" shape="round" className="hero__clock-portal-close" aria-label="Close" onClick={() => setOpen(false)}>×</RingButton>
       </div>
     </div>
   );

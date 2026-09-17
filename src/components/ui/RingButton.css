@@ -1,0 +1,62 @@
+/* Every button wears the logo's ring as its border. See RingButton.jsx. */
+.ring-btn {
+  --ring-ink: var(--ink);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.ring-btn--pill { height: var(--ring-size, 44px); padding: 0 1.75em; border-radius: 999px; }
+.ring-btn--round { width: var(--ring-size, 40px); height: var(--ring-size, 40px); padding: 0; border-radius: 50%; }
+
+/* The ring turns accent, like the logo's ring does under the pointer. */
+.ring-btn:focus-visible { --ring-ink: var(--accent); }
+@media (hover: hover) {
+  .ring-btn:hover:not(:disabled) { --ring-ink: var(--accent); }
+}
+
+.ring-border {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  color: var(--ring-ink);
+  pointer-events: none;
+  transition: color .25s;
+}
+.ring-border svg { display: block; height: 100%; overflow: hidden; fill: currentColor; }
+/* Each half of the ring is exactly half the ring's own width for its height. */
+.ring-border__cap { flex: none; width: auto; aspect-ratio: 477.5 / 946; }
+/* The straight bands tuck half a pixel under each half, so no seam shows. */
+.ring-border__span { flex: 1 1 0; width: auto; min-width: 0; margin: 0 -.5px; }
+.ring-border--round svg { width: 100%; }
+.ring-border--echo { z-index: 0; }
+
+/* The ink stays inside the ring: its edge sits in the middle of the band. */
+.ring-btn__flood {
+  position: absolute;
+  inset: calc(var(--ring-size, 44px) * .0125);
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.ring-btn__blob { position: absolute; left: 50%; top: 50%; width: 0; height: 0; border-radius: 50%; background: var(--ink); }
+.ring-btn__label { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: .45em; }
+.ring-btn__arrow { position: relative; display: inline-block; width: 1em; height: 1.2em; overflow: hidden; }
+.ring-btn__arrow > span { position: absolute; inset: 0; display: grid; place-items: center; }
+.ring-btn__arrow > span + span { visibility: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-border { transition: none; }
+}

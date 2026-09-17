@@ -10,17 +10,38 @@
  * this module is the only thing that sets it. The WebGL stage re-reads its
  * palette on the `brand:scheme` event (see palette.js).
  *
- * A reader's own choice is provided for but not yet offered: `setScheme('day' |
- * 'night' | 'auto')` is the hook the future toggle will call. Until then the
- * clock hints at day and night on its own (see SketchClock's halo).
+ * A reader can overrule the sun: the pull cord hanging over the right rail
+ * (components/cord) calls `toggleScheme()`, and the choice is kept in
+ * localStorage so the lights stay the way they were left. Until a reader
+ * pulls it, the page follows the sun.
  */
 
 import { sunState } from '../lib/sun.js';
 
 const EVENT = 'brand:scheme';
+const KEY = 'saad:scheme';
+
+/** The reader's kept choice, if any. Storage may be blocked; that is 'auto'. */
+function readChoice() {
+  try {
+    const kept = window.localStorage.getItem(KEY);
+    return kept === 'day' || kept === 'night' ? kept : 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+function keepChoice(next) {
+  try {
+    if (next === 'auto') window.localStorage.removeItem(KEY);
+    else window.localStorage.setItem(KEY, next);
+  } catch {
+    // Private mode or storage off: the choice lasts the visit and no longer.
+  }
+}
 
 /** 'auto' follows the sun; 'day' / 'night' is a reader's override. */
-let choice = 'auto';
+let choice = readChoice();
 let current = null;
 
 /** The scheme the sun (or the reader) asks for at `now`. */
@@ -30,7 +51,12 @@ export function resolveScheme(now = Date.now()) {
 
 /** The scheme the page is showing. */
 export function currentScheme() {
-  return current;
+  return current ?? resolveScheme();
+}
+
+/** What is deciding the scheme: 'auto' (the sun), or the reader's 'day' / 'night'. */
+export function schemeChoice() {
+  return choice;
 }
 
 /** Apply the scheme for `now` to the document, if it has changed. */
@@ -48,10 +74,16 @@ export function applyScheme(now = Date.now()) {
   return next;
 }
 
-/** A reader's override — the future toggle calls this. */
+/** A reader's override, kept between visits. Anything but day or night hands back to the sun. */
 export function setScheme(next) {
   choice = next === 'day' || next === 'night' ? next : 'auto';
+  keepChoice(choice);
   return applyScheme();
+}
+
+/** The pull cord: whichever scheme is showing, show the other. */
+export function toggleScheme() {
+  return setScheme(currentScheme() === 'night' ? 'day' : 'night');
 }
 
 /** Call `callback(scheme)` whenever the page's scheme changes. Returns the stop. */

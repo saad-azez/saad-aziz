@@ -292,15 +292,18 @@ Section  .hero                       relative, 100svh, overflow hidden
 ├── Embed  .hero__canvas             <canvas> for the 3D wordmark
 ├── Nav    .nav                      the head rail — see the next section
 ├── Div    .rail .rail--left         fixed drafting margin, top 0 to bottom 0
-│   └── Div   .rail__scale           the ruled ticks
+│   └── SVG   .rail__scale           the ruled ticks (one path each)
 ├── Div    .rail .rail--right        fixed drafting margin
-│   └── Div   .rail__scale
+│   └── SVG   .rail__scale
 └── Div    .hero__frame              the content safe area
     └── Div   .hero__foot            the spread — see the next section
 ```
 
 The rails hold nothing. A margin is structure, not a shelf — build them as two
-empty divs with the ruled background and leave them alone. They run the full
+empty divs and leave them alone. Their boundary line is NOT a border: it is a
+`.rail__edge` path inside each rail's `.rail__scale` SVG, so the lamp can bow
+it. `.rail` is clipped with `clip-path: inset(0 -90px)` rather than
+`overflow: hidden`, so the bow has room to leave the rail's own box. They run the full
 height of the viewport, top 0 to bottom 0. (`--rail-top` only matters if the
 shelved head rail comes back; while it is off the page nothing hangs from it.)
 
@@ -313,11 +316,32 @@ margin, change it in one place: `--rail` or `--gutter`.
 when the loader hands over. Build the base classes with `visibility: hidden` and
 let the code add the combo.
 
+One fixture lives in the margin OUTSIDE the right rail: the lamp
+(`src/components/cord/`), the site's light switch - a little Luxo-style bell
+shade on its own cord from the top edge, its mouth open underneath and the bulb
+hanging just out of it. It hangs still and straight, centred in the clear strip
+between the rail's graduations and the screen edge with a 3px gap either side,
+and it never touches the rail. The only way it moves is up and down its cord.
+
+It is a fixed Div (`.cord`, top 0 / right 0, `pointer-events: none`) holding an
+inline SVG - the masked light group (a soft pool and a bloom), the cord, and
+the head (neck, shade, mouth, bulb, sheen) - plus one invisible 44 x 44 Button
+(`.cord__hit`) carried along by the head, with the note (`.cord__note`) to its
+left. The light's mask keeps it inside the margin. `--cord-length` is read by
+the code. Gradient stops take their colour from CSS classes (`.cord__stop--*`),
+so both schemes reach them.
+
+What is code and cannot be built in the Designer: the cord's spring when it is
+pulled down and let go, the switch throwing mid-pull, the light answering a
+nearby pointer, and the light shortening every graduation it falls on. Combo
+classes toggled by script: `.cord--visible`, `.cord--night`, `.cord--near`. The
+rails themselves stay empty.
+
 ### Extra properties needing an embed
 
 | Property | Where | Why |
 | --- | --- | --- |
-| `repeating-linear-gradient` | `.rail__scale` | The ruled tick marks |
+| inline SVG | `.rail__scale` | The margin's whole ruled edge - the boundary line as a `.rail__edge` path (NOT a CSS border) and one `<path class="rail__tick">` per graduation, because the lamp's light bows the line and shortens the graduations |
 | `isolation: isolate` | `.hero` | Keeps the canvas's stacking context contained |
 | `grid-template-areas` | `.hero__block` | Named areas — the Designer's grid panel can place them, but the folds per query are custom code |
 | `text-wrap: balance` | `.hero__lede` | The subject holds one line, or breaks evenly when it cannot |
@@ -427,95 +451,6 @@ bundle does this and needs only the class names above to be present.
 | `display: none` | `.nav__meta` at `max-width: 30em` | The clock yields to the stations |
 
 ---
-
-## The drawing set — the sheets below the hero
-
-Every section below the hero is a **sheet**, and every sheet has the same head:
-
-```
-Section  .sheet  (#work, #about, #contact)     padded --sheet-pad / --frame-inset
-├── Header .sheet__head                       grid, two columns
-│   ├── Div  .sheet__rule                     the top edge, drawn in on entry
-│   ├── Para .sheet__meta                     "SHEET 01" left, the sheet's name right
-│   │   ├── Text .sheet__no  (with .sheet__no-key "Sheet" in the accent)
-│   │   └── Text .sheet__eyebrow
-│   ├── H2   .sheet__title                    full width, display face
-│   │   └── Div  .sheet__title-line (×n)      overflow hidden — the mask
-│   │       └── Text .sheet__title-text       rises out of it
-│   └── Para .sheet__intro                    right column
-└── Div    .sheet__body
-```
-
-`.sheet--night` is a combo class on the section that flips the colour tokens
-(see BRAND.md). Nothing inside the sheet changes.
-
-**Scroll reveals** are attributes, not classes: `data-rule` on a hairline
-(drawn from the left), `data-line` on a line of display type inside a mask
-(rises), `data-rise` on anything else (fades and lifts; siblings stagger). Set
-them as custom attributes in the element settings. Script does the rest, once,
-as each element enters the lower part of the viewport.
-
-**Smooth scrolling** is GSAP ScrollSmoother, and it needs two wrappers around
-the whole page: `#smooth-wrapper > #smooth-content`. The head rail, the side
-rails and the loader sit **outside** them, because they are fixed. Anything
-`position: sticky` inside the content will not stick — the page moves by
-transform — so Fig. 1 on the about sheet is pinned by script instead.
-
-### Sheet 01 · Work — the plates
-
-```
-Div      .work__grid                      two columns
-└── Link .plate  (×n)                     one project
-    ├── Div  .plate__frame                4:3, ruled
-    │   ├── Text .plate__no               "01", in the accent
-    │   ├── Div  .plate__hatch            embed: diagonal repeating-linear-gradient
-    │   ├── Text .plate__stamp            "Plate not yet issued", set 6° off square
-    │   └── Image .plate__img             (when the project has one — replaces the two above)
-    ├── Div  .plate__row                  title left, client · year right
-    ├── Text .plate__summary
-    └── Div  .plate__tags                 tags with accent middots, arrow at the end
-```
-
-### Sheet 02 · About — the figure and the record
-
-```
-Div      .about__body                     two columns, figure left
-├── Figure .figure                        pinned by script on desktop
-│   ├── Div  .figure__frame               3:4, ruled; the image is set at 240% and shifted (custom code)
-│   │   ├── Image .figure__img
-│   │   └── Div  .figure__corner (×4, --tl --tr --bl --br)   registration marks
-│   └── Figcaption .figure__caption       "FIG. 1" · "Saad Aziz, Karachi."
-└── Div    .about__record
-    ├── Div  .about__story                .about__lede then .about__para
-    ├── Div  .table  (revisions)          .table__field, .table__cols, .table__row (×n), .table__end
-    │   └── .table__row: .table__rule, .table__rev, .table__date, .table__note
-    └── Div  .table  (schedule)
-        └── .table__row.table__row--schedule: .table__rule, .table__mark (SVG embed), .table__name, .table__note
-```
-
-### Sheet 03 · Contact — the address and the colophon
-
-```
-Div      .contact__body
-├── Div  .contact__address                .contact__status (with dot), .contact__mail (display face)
-└── List .contact__links                  only the links with an href
-Footer   .colophon                        four columns; .colophon__rule, .colophon__line (×3),
-                                          .colophon__line--end with .colophon__clock and .colophon__top
-```
-
-The placeholder mark `.ph` is one site-wide class (global.css): muted ink and
-a dashed underline. Script adds it to any value from the content file that is
-still in square brackets.
-
-### Properties on the sheets that need an embed
-
-| Property | Where | Why |
-| --- | --- | --- |
-| `repeating-linear-gradient` | `.plate__hatch` | The hatching on an unissued plate |
-| `width: 240%` + `transform: translate()` | `.figure__img` | Crops the plate to head and shoulders without a second image |
-| `text-wrap: pretty` | intros, notes, summaries | No lone word on a last line |
-| `fill: currentColor` | `.table__mark svg` | The tool marks take the ink colour in both schemes |
-| `font-variant-numeric: tabular-nums` | `.table__date`, `.colophon__clock` | Digits never shift a column |
 
 ## Adding a component
 

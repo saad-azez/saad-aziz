@@ -9,9 +9,9 @@ Vector-traced reference outlines for the 3D signature, DM Serif Display for the 
 `npm run wordmark` cuts the 3D word from Aminute (`WORDMARK_FONT` and
 `WORDMARK` override the face and the word).
 
-Everything the hero says lives in `HERO` in `src/content/site.js`. The sheets
-below (work, about, contact) exist in `src/components` but are off the page —
-`src/routes/HeroRoute.jsx` renders only the hero.
+Everything the hero says lives in `HERO` in `src/content/site.js`. The
+sections below the hero (work, about, contact) have been removed and will be
+rebuilt to a new brief; `src/routes/HeroRoute.jsx` renders only the hero.
 
 ---
 
@@ -27,20 +27,6 @@ page reads as a single document rather than a stack of bands.
 there in `[square brackets]` is a placeholder and renders as one (muted, with a
 dashed underline). Nothing in the file invents a client, a date, a number or a
 quote — those gaps are yours to fill before launch. Search it for `[`.
-
-## The sheets
-
-| Sheet | Section | What it holds |
-| --- | --- | --- |
-| 00 | Hero | The wordmark, filling the band between the rails, and the title block: subject, practice (with the author's stamp), status and one call to action |
-| 01 | Work | A night plate — the same tokens in the other scheme — holding a grid of project plates. A plate without an image is hatched and stamped "not yet issued" |
-| 02 | About | Fig. 1 (the portrait, pinned while the record scrolls), the story, the **revisions** table (the timeline) and the **schedule** (what I build with, and what each is for) |
-| 03 | Contact | The address at display size, the availability line, and the colophon that closes the set |
-
-The head rail's stations are the sheet numbers. Its bead rests on whichever
-sheet holds the middle of the viewport, and on the zero while the hero does.
-Scrolling is smoothed (GSAP ScrollSmoother); every sheet's rules draw in and
-its lettering rises as it enters, once. Reduced motion skips all of it.
 
 ## The hero
 The centred, bevelled 3D text enters and then rests, ruled in on all four sides: two

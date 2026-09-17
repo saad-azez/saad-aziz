@@ -31,9 +31,8 @@ FontLoader. Each glyph becomes a separate beveled ExtrudeGeometry. The font
 stores contours and spacing; the scene owns depth, bevel, materials, pivots,
 and the independent coin-shaped dot. The lowercase a reveal also uses the font.
 The original timing, D highlight, stars, and other symbol choreography remain.
-The A-to-S flourish is a separate named mesh under the word group. It grows
-right-to-left at the final spacing and is not included in either font glyph.
-The earlier S-region clipping shader is removed.
+The A-to-S connecting flourish has been removed. S and the first A remain
+separate throughout the final writing beat and resting wordmark.
 
 OpenType is a 2D outline format. These are real 3D meshes generated from a real
 font; it is not a special binary “3D font” format. Handwriting reveals and
@@ -44,3 +43,7 @@ The OTF can also be loaded with CSS `@font-face` using
 `url('/fonts/SAADiDisplay-Regular.otf') format('opentype')`.
 
 Version 1.2 smooths the S waist with aligned curve tangents, removing the remaining shoulder at the former join. The lowercase i now has a horizontal stem top and parallel upright sides, centered below its unchanged circular dot.
+
+Version 1.3 mirrors the lowercase i bottom serif vertically onto its top. Both ends have the same width, thickness and curved shoulders; the upright stem and round dot remain.
+
+Version 1.4 raises the i dot to the 70-unit capital line by lengthening the upright stem, preserving the mirrored serifs and dot diameter. The hero packs actual beveled glyph bounds with a uniform 1.26-unit gap, rather than inheriting unequal font advances.

@@ -3,13 +3,17 @@ import gsap from 'gsap';
 import { EASE, reducedMotion } from '../../brand/motion.js';
 import WordmarkScene from '../../webgl/hero/WordmarkScene.js';
 import SketchClock from './SketchClock.jsx';
+import WordSwap from './WordSwap.jsx';
+import RingButton from '../ui/RingButton.jsx';
+import { sectionLink } from '../../lib/sectionLink.js';
+import AnimationDebug from './AnimationDebug.jsx';
 import { HERO, PERSON } from '../../content/site.js';
 import ring from '../../assets/monogram-ring.svg?raw';
 import letters from '../../assets/monogram-letters.svg?raw';
 import './Hero.css';
 
 export default function Hero({ reveal, animateText, onReady }) {
-  const [playing, setPlaying] = useState(true);
+  const [debugOpen, setDebugOpen] = useState(false);
   const rootRef = useRef(null);
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
@@ -22,7 +26,6 @@ export default function Hero({ reveal, animateText, onReady }) {
   useEffect(() => {
     const scene = new WordmarkScene(canvasRef.current);
     sceneRef.current = scene;
-    scene.onRest = () => setPlaying(false);
     scene.setVisible(false);
     scene.mount();
     readyRef.current?.();
@@ -35,14 +38,16 @@ export default function Hero({ reveal, animateText, onReady }) {
       const box = wordRef.current?.getBoundingClientRect();
       const left = document.querySelector('.rail--left')?.getBoundingClientRect();
       const right = document.querySelector('.rail--right')?.getBoundingClientRect();
-      if (box) sceneRef.current?.setBand(box.top, box.bottom, left?.right ?? 0, right?.left ?? innerWidth);
+      if (box) sceneRef.current?.setBand(box.top, box.bottom,
+        debugOpen ? box.left : left?.right ?? 0,
+        debugOpen ? box.right : right?.left ?? innerWidth);
     };
     measure();
     const observer = new ResizeObserver(measure);
     if (wordRef.current) observer.observe(wordRef.current);
     window.addEventListener('resize', measure);
     return () => { observer.disconnect(); window.removeEventListener('resize', measure); };
-  }, []);
+  }, [debugOpen]);
 
   useEffect(() => { sceneRef.current?.setVisible(reveal); }, [reveal]);
 
@@ -104,19 +109,20 @@ export default function Hero({ reveal, animateText, onReady }) {
   }, [animateText]);
 
   return (
-    <section className="hero" ref={rootRef} aria-labelledby="hero-title">
+    <section className={`hero${debugOpen ? ' hero--debug' : ''}`} ref={rootRef} aria-labelledby="hero-title">
       <h1 id="hero-title" className="hero__title">{PERSON.mark} — {PERSON.role.toLowerCase()}</h1>
       <canvas ref={canvasRef} className="hero__canvas" aria-hidden="true" />
+      {(import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug')) && <AnimationDebug sceneRef={sceneRef} ready={reveal} onOpenChange={setDebugOpen} />}
 
       <div className={`hero__frame${reveal ? ' hero__frame--visible' : ''}`}>
         <header className="hero__top">
-          <a className="hero__mark" href="#top" aria-label={PERSON.name} ref={markRef}>
+          <a className="hero__mark" {...sectionLink('top')} aria-label={PERSON.name} ref={markRef}>
             <span className="hero__mark-letters" dangerouslySetInnerHTML={{ __html: letters }} />
             <span className="hero__mark-ring" ref={ringRef} dangerouslySetInnerHTML={{ __html: ring }} />
           </a>
           <SketchClock draw={animateText} />
           <nav className="hero__nav" aria-label="Main navigation">
-            <a href={`mailto:${PERSON.email}`}>Let’s talk <span aria-hidden="true">↗</span></a>
+            <RingButton href={`mailto:${PERSON.email}`} motion arrow>Let’s talk</RingButton>
           </nav>
           <span className="hero__rule hero__rule--top" aria-hidden="true" />
         </header>
@@ -126,21 +132,11 @@ export default function Hero({ reveal, animateText, onReady }) {
         <footer className="hero__bottom">
           <span className="hero__rule hero__rule--bottom" aria-hidden="true" />
           <div className="hero__headline">
-            <p className="hero__discipline">{HERO.discipline}</p>
+            <p className="hero__greeting">{HERO.greeting.before} <WordSwap lead={HERO.greeting.lead} words={HERO.greeting.words} label={HERO.greeting.label} play={animateText} />{HERO.greeting.after}</p>
             <h2>{HERO.headline[0]}<br /><em>{HERO.headline[1]}</em></h2>
           </div>
           <div className="hero__intro">
-            <p>{HERO.description}</p>
-            <div className="hero__actions">
-              <a className="text-link" href={`mailto:${PERSON.email}`}>{HERO.invitation} <span aria-hidden="true">↗</span></a>
-              <button className="hero__replay" disabled={playing || reducedMotion} aria-label="Replay signature animation" title="Replay signature" onClick={() => {
-                const scene = sceneRef.current;
-                if (!scene || scene.entrance) return;
-                setPlaying(true);
-                scene.sequence.reset();
-                scene.entrance = scene.sequence.play(0);
-              }}>↻</button>
-            </div>
+            <p>{HERO.offer.before} <WordSwap lead={HERO.offer.lead} words={HERO.offer.words} label={HERO.offer.label} play={animateText} delay={1.8} reserve /></p>
           </div>
         </footer>
       </div>

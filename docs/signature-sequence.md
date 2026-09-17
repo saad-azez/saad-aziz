@@ -94,3 +94,26 @@ D correction: the detached i components are segmented separately so the D curve 
 A-to-S connector: the S flourish is masked from the initial frame. The A crossbar writes right-to-left; after the letter spacing settles at 1.83, the original connecting outline reveals from the A end back into S through 2.15. No letter scaling or substitute stroke geometry is used. Reduced-motion mode displays the completed lockup.
 
 Standalone-glyph correction: S, A and D are redrawn as closed Bezier font contours, removing all remnants of the old logo joins. The S mask is deleted; a separate A-to-S flourish mesh handles the final connection. Both A instances use the same glyph. Native-font and WebGL specimens check the unmasked contours independently.
+
+The separate A-to-S flourish and its reveal shader are removed at the user's request. The first A finishes as an independent glyph, without a joining stem.
+
+
+D rim-light revision: the D surface material is unchanged during this beat.
+A centered, blurred front-face silhouette sits behind it; the opaque letter
+masks the fill so light appears around both the exterior and counter edges.
+Stars keep their metallic materials and rotate/rise/return, but now travel
+behind the solid left stem before spreading above the cap. No clipping plane
+or overflow mask is used.
+
+Animation controls are available by the bottom-left button during local
+development, or with `?debug` in a built preview. The general panel supports
+pause, resume, restart, timeline scrubbing, phase-clock frame steps, and
+playback speed. Letter-specific controls, D-only playback, and saved D/star
+overrides have been removed; the shipped animation values remain in effect.
+The open panel reserves a right-hand column on desktop. At 900px and below,
+the upper 55% becomes the animation preview and the controls dock below it;
+the footer is hidden only in this debug layout. Closing restores the hero.
+
+Glow-first timing: the D rim rises at phase .73-.84 and holds before the first star starts at 1.04 (about 0.63 real seconds after glow onset). The .73-1.30 beat now lasts 1.15 seconds. Stars rise through 1.35 and return at 1.50-1.78 plus their delays. The rim fades at 1.28-1.56; porcelain uses a contrasting tinted shadow, graphite uses a luminous rim. The letter surface stays unchanged.
+
+Rim readability pass: the effect now combines a narrow bright edge with a broader falloff, using 0.9 peak opacity and a 3.2-unit base blur radius. The light theme uses the brand accent; the dark theme uses near-white tinted light. The letter face is unchanged.

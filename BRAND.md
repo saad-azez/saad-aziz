@@ -5,9 +5,11 @@ object set in a lettered material and a single accent of **verdigris**, the
 green of oxidised copper, that only ever appears on an edge or a label. Calm
 everywhere, one place with a pulse.
 
-Two schemes, one palette. Every role has a light value and a dark value, and
-the page follows the reader's system setting (`prefers-color-scheme`) on its
-own — nothing to toggle, nothing to remember.
+Two schemes, one palette. Every role has a light value and a dark value. The
+page does not follow the reader's system setting: it is light while it is day
+in Islamabad and dark while it is night there (`src/brand/scheme.js`). The one
+control is the pull cord hanging over the right rail — a light switch. Pull it
+and the reader's choice overrules the sun, and is remembered between visits.
 
 Every value below is declared once, in [`src/brand/tokens.css`](src/brand/tokens.css).
 The page reads them as `var(--…)`; the WebGL stage reads the same declarations

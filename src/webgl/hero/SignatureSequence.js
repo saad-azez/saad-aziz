@@ -10,6 +10,9 @@ const smooth = (a, b, t) => {
 };
 const mix = THREE.MathUtils.lerp;
 
+export const D_DEFAULTS = { glow: .9, softness: 3.2, lift: 1.2, starSize: 1, rise: 1, spread: 1, spin: 1, stagger: .045 };
+export const SEQUENCE_BEATS = [[.233, .32], [.367, .34], [.50, .38], [.73, .48], [1.3, 1.15], [1.83, .62], [2.9, .82]];
+
 // A single, seekable sequence. Times are relative to the plain word appearing
 // at 1.30s in Screen Recording 2026-09-12 223237 (30 fps). No entrance stagger.
 export default class SignatureSequence {
@@ -18,6 +21,7 @@ export default class SignatureSequence {
     this.materials = new Set();
     this.textures = new Set();
     this.clock = { time: 0 };
+    this.dSettings = { ...D_DEFAULTS };
     const { letters, bodies, renderer } = owner;
     this.widths = letters.map(g => {
       const b = new THREE.Box3().setFromObject(g);
@@ -159,18 +163,36 @@ export default class SignatureSequence {
     this.paragraph.add(this.caret);
     this.layers[3].add(this.paragraph);
 
-    // Highlight the existing surface; no offset silhouette or shadow plane.
-    this.dBase = this.keep(bodies[3].material.clone());
-    bodies[3].material = this.dBase;
-    this.dBase.uniforms.uLift = { value: 0 };
-    this.dBase.fragmentShader = this.dBase.fragmentShader
-      .replace('uniform float uRoughness, uOpacity;', 'uniform float uRoughness, uOpacity, uLift;')
-      .replace('vec4(shadeSurface(vView, normalize(vNormal)), uOpacity)',
-        'vec4(mix(shadeSurface(vView, normalize(vNormal)), uHighlight, uLift), uOpacity)');
-    this.dTop = bodies[3].geometry.boundingBox.max.y;
-    this.starClip = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    this.starClipPoint = new THREE.Vector3();
-    renderer.localClippingEnabled = true;
+    // Blur the actual front-face silhouette behind the untouched D. The body
+    // occludes its fill, leaving light around both the outer rim and counter.
+    const dBox = bodies[3].geometry.boundingBox;
+    this.dTop = dBox.max.y;
+    this.dMask = document.createElement('canvas'); this.dMask.width = this.dMask.height = 512;
+    this.dGlowCanvas = document.createElement('canvas'); this.dGlowCanvas.width = this.dGlowCanvas.height = 512;
+    const margin = 20, width = dBox.max.x - dBox.min.x + margin * 2;
+    const height = dBox.max.y - dBox.min.y + margin * 2;
+    this.dGlowSize = { width, height };
+    const mask = this.dMask.getContext('2d'); mask.fillStyle = '#fff';
+    const positions = bodies[3].geometry.attributes.position, normals = bodies[3].geometry.attributes.normal;
+    mask.beginPath();
+    for (let n = 0; n < positions.count; n += 3) {
+      if (normals.getZ(n) < .999 || normals.getZ(n + 1) < .999 || normals.getZ(n + 2) < .999) continue;
+      for (let k = 0; k < 3; k++) {
+        const x = (positions.getX(n + k) - dBox.min.x + margin) / width * 512;
+        const y = (dBox.max.y + margin - positions.getY(n + k)) / height * 512;
+        if (!k) mask.moveTo(x, y); else mask.lineTo(x, y);
+      }
+      mask.closePath();
+    }
+    mask.fill();
+    this.dGlowTexture = new THREE.CanvasTexture(this.dGlowCanvas);
+    this.textures.add(this.dGlowTexture);
+    this.dGlowMaterial = this.keep(new THREE.MeshBasicMaterial({ map: this.dGlowTexture,
+      transparent: true, depthWrite: false, opacity: 0 }));
+    this.dGlow = new THREE.Mesh(new THREE.PlaneGeometry(width, height), this.dGlowMaterial);
+    this.dGlow.position.set((dBox.min.x + dBox.max.x) / 2, (dBox.min.y + dBox.max.y) / 2, -5);
+    this.layers[3].add(this.dGlow);
+    this.updateGlow();
     this.stars = [0, 1, 2].map(() => {
       const shape = new THREE.Shape();
       for (let k = 0; k < 8; k++) {
@@ -183,7 +205,6 @@ export default class SignatureSequence {
       const material = this.keep(new THREE.MeshPhysicalMaterial({
         color: owner.palette.accent, metalness: .7, roughness: .28,
         clearcoat: .65, envMap: this.environment.texture,
-        clippingPlanes: [this.starClip],
       }));
       const star = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, {
         depth: 3, bevelEnabled: true, bevelSize: .8,
@@ -191,35 +212,6 @@ export default class SignatureSequence {
       }), material);
       this.layers[3].add(star); return star;
     });
-
-    // A separate flourish joins the clean glyphs only during the final beat.
-    // Neither font outline contains any piece of this connecting ornament.
-    const sBounds = bodies[0].geometry.boundingBox, aBounds = bodies[1].geometry.boundingBox;
-    const sx = owner.restX[0] + mix(sBounds.min.x, sBounds.max.x, .745);
-    const sy = owner.restY[0] + mix(sBounds.min.y, sBounds.max.y, .495);
-    const ax = owner.restX[1] + mix(aBounds.min.x, aBounds.max.x, .27);
-    const ay = owner.restY[1] + mix(aBounds.min.y, aBounds.max.y, .454);
-    const flourish = new THREE.Shape();
-    flourish.moveTo(ax + 1, ay + .7);
-    flourish.bezierCurveTo(ax - 10, ay + .7, sx + 8, sy - 2, sx - 1, sy + .8);
-    flourish.lineTo(sx - 1, sy - 1.8);
-    flourish.bezierCurveTo(sx + 8, sy - 3, ax - 10, ay - 1.5, ax + 1, ay - 1.5);
-    flourish.closePath();
-    const connectorGeometry = new THREE.ExtrudeGeometry(flourish, {
-      depth: 5, bevelEnabled: true, bevelSize: .06, bevelThickness: .45,
-      bevelSegments: 3, curveSegments: 36,
-    });
-    connectorGeometry.translate(0, 0, -2.5);
-    this.connectorMaterial = this.keep(owner.material.clone());
-    this.connectorMaterial.uniforms.uCut = { value: ax + 2 };
-    this.connectorMaterial.vertexShader = 'varying float vConnectorX;\n' + this.connectorMaterial.vertexShader
-      .replace('vView = view.xyz;', 'vView = view.xyz; vConnectorX = position.x;');
-    this.connectorMaterial.fragmentShader = 'uniform float uCut; varying float vConnectorX;\n' + this.connectorMaterial.fragmentShader
-      .replace('void main() {', 'void main() { if (vConnectorX < uCut) discard;');
-    this.connector = new THREE.Mesh(connectorGeometry, this.connectorMaterial);
-    this.connector.name = 'A-to-S flourish';
-    this.connectorRange = [ax + 2, sx - 2];
-    owner.word.add(this.connector);
 
     // The terminal becomes a cloth flag. Its mesh unfurls and folds back into
     // the stem; the coin remains separate geometry throughout the sequence.
@@ -373,11 +365,19 @@ export default class SignatureSequence {
     return mesh;
   }
 
-  updateStarClip() {
-    this.owner.letters[3].updateWorldMatrix(true, false);
-    this.starClipPoint.set(0, this.dTop + .15, 0);
-    this.owner.letters[3].localToWorld(this.starClipPoint);
-    this.starClip.constant = -this.starClipPoint.y;
+  updateGlow() {
+    const ctx = this.dGlowCanvas.getContext('2d');
+    ctx.clearRect(0, 0, 512, 512);
+    const radius = this.dSettings.softness * 512 / this.dGlowSize.height;
+    // A broad falloff plus a tighter luminous rim remains legible in motion.
+    ctx.globalAlpha = .65;
+    ctx.filter = `blur(${radius * 1.8}px)`;
+    ctx.drawImage(this.dMask, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.filter = `blur(${radius * .55}px)`;
+    ctx.drawImage(this.dMask, 0, 0);
+    ctx.filter = 'none';
+    this.dGlowTexture.needsUpdate = true;
   }
 
   paintPalette() {
@@ -390,7 +390,12 @@ export default class SignatureSequence {
     this.secondary.color.set(p.figure).lerp(accent, .38);
     this.aWire.material.color.copy(accent);
     this.wireMaterial.color.set(p.ink);
-    paintSolid(this.dBase, p);
+    const ground = new THREE.Color(p.ground);
+    const lightGround = ground.r * .2126 + ground.g * .7152 + ground.b * .0722 > .35;
+    // A tinted rim shadow reads on porcelain; soft light reads on graphite.
+    this.dGlowMaterial.color.set(lightGround ? p.accent : p.figureHighlight)
+      .lerp(accent, lightGround ? 0 : .10);
+    this.dGlowContrast = 1;
     this.satinColor.set(p.groundGlow).lerp(new THREE.Color(0xffffff), .62);
     this.polishedColor.copy(accent).lerp(new THREE.Color(0xffffff), .32);
     this.stars.forEach((star, i) => {
@@ -398,7 +403,6 @@ export default class SignatureSequence {
       if (i === 2) star.material.color.lerp(accent, .55);
     });
     paintSolid(this.sBase, p);
-    paintSolid(this.connectorMaterial, p);
     [this.lowerA, this.writtenA, this.slash].forEach(mesh => paintSolid(mesh.material, p));
     if (this.clock.time) this.paint(this.clock.time);
   }
@@ -422,7 +426,7 @@ export default class SignatureSequence {
     const bounds = letters.map(letter => {
       const box = new THREE.Box3();
       letter.traverseVisible(object => {
-        if (!object.geometry || this.stars.includes(object)) return;
+        if (!object.geometry || object === this.dGlow || this.stars.includes(object)) return;
         if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
         box.union(object.geometry.boundingBox.clone().applyMatrix4(object.matrixWorld));
       });
@@ -450,7 +454,7 @@ export default class SignatureSequence {
       onComplete: () => { this.owner.entrance = null; this.paint(2.9); this.owner.render(); this.owner.onRest?.(); },
     });
     // Keep the choreography intact, but give the material studies room to read.
-    for (const [time, duration] of [[.233, .32], [.367, .34], [.50, .38], [.73, .48], [1.3, .73], [1.83, .62], [2.9, .82]]) {
+    for (const [time, duration] of SEQUENCE_BEATS) {
       timeline.to(this.clock, { time, duration, ease: 'none', onUpdate: () => {
         this.paint(this.clock.time); this.owner.render();
       } });
@@ -459,6 +463,7 @@ export default class SignatureSequence {
   }
 
   paint(t) {
+    this.clock.time = t;
     const { letters, bodies, dot, restX, restY } = this.owner;
     this.phase = t < .1 ? 'plain' : t < .233 ? 'symbols' : t < .367 ? 'satin' : t < .50 ? 'gloss-cursor' : t < .73 ? 'wire-flag' : t < 1.3 ? 'glow-stars' : t < 1.83 ? 'restore' : t < 2.8 ? 'dot' : 'rest';
     this.layers.forEach(layer => { layer.visible = true; layer.children.forEach(obj => { obj.visible = false; }); });
@@ -467,11 +472,7 @@ export default class SignatureSequence {
     dot.visible = true; dot.position.set(0, 0, 0);
     this.sBase.uniforms.uOpacity.value = 1;
     this.sBase.uniforms.uReveal.value = 1;
-    // Wait for the original letter spacing to return so the ink stays joined
-    // to A throughout its right-to-left extension into S.
-    const connection = smooth(1.83, 2.15, t);
-    this.connector.visible = connection > 0;
-    this.connectorMaterial.uniforms.uCut.value = mix(...this.connectorRange, connection);
+
 
     const slash = t >= .133 && t < .43;
     const firstAWriting = t >= .30 && t < 1.52;
@@ -529,17 +530,27 @@ export default class SignatureSequence {
       this.caret.position.x = mix(-26, 23, smooth(.367, .73, t));
       this.caret.position.y = -2 * Math.sin(smooth(.367, .73, t) * Math.PI);
     }
-    const glow = smooth(.73, .80, t) * (1 - smooth(1.08, 1.25, t));
-    this.dBase.uniforms.uLift.value = glow * .18;
-    const dLift = smooth(.73, .84, t) * (1 - smooth(1.25, 1.48, t));
-    letters[3].position.y += dLift * 1.5;
+    // Give the rim its own beat before any star begins moving.
+    const glow = smooth(.73, .84, t) * (1 - smooth(1.28, 1.56, t));
+    this.dGlow.visible = glow > 0;
+    this.dGlowMaterial.opacity = glow * this.dSettings.glow * this.dGlowContrast;
+    const dLift = smooth(.73, .84, t) * (1 - smooth(1.50, 1.78, t));
+    letters[3].position.y += dLift * this.dSettings.lift;
     this.stars.forEach((star, i) => {
-      const out = smooth(.84 + i * .045, 1.15 + i * .045, t);
-      const back = smooth(1.30 + i * .045, 1.57 + i * .045, t);
+      const settings = this.dSettings;
+      const delay = i * settings.stagger;
+      const out = smooth(1.04 + delay, 1.35 + delay, t);
+      const back = smooth(1.50 + delay, 1.78 + delay, t);
       const p = out * (1 - back);
       star.visible = p > .001;
-      star.position.set(8 + i * 7 + p * (i - 1) * 3, 21 + p * (22 + i * 11), -9 + p * 17);
-      star.rotation.set(.14, p * Math.PI * (i % 2 ? -1 : 1), p * .3);
+      // Travel through the solid left stem first, then fan out over the rim.
+      // Actual depth testing hides the back travel; no overflow/clipping mask.
+      const fan = smooth(.7, 1, p);
+      star.scale.setScalar(settings.starSize * mix(.35, 1, smooth(0, .65, p)));
+      star.position.set(-15.5 + fan * (24 + i * 8) * settings.spread,
+        this.dTop - 5 + p * (18 + i * 12) * settings.rise, -8 + p * 2);
+      star.rotation.set(.14, p * Math.PI * (i % 2 ? -1 : 1) * settings.spin, p * .3);
+
     });
 
     if (flag) {

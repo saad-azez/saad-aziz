@@ -20,6 +20,9 @@
   bottom: 0;
   z-index: 20;
   width: var(--rail);
+  /* Clipped top and bottom to the viewport, but open at the sides: the scale
+     is drawn taller than the screen, and its strokes sit on the rail's edge. */
+  clip-path: inset(0 -90px);
   pointer-events: none;
   visibility: hidden;
 }
@@ -30,35 +33,48 @@
   visibility: visible;
 }
 
-/* .rail--left  ·  combo class */
+/* .rail--left  ·  combo class
+   The boundary line is drawn inside `.rail__scale`, not as a border — see
+   `.rail__edge`. */
 .rail--left {
   left: 0;
-  border-right: 1px solid var(--rule);
 }
 
 /* .rail--right  ·  combo class */
 .rail--right {
   right: 0;
-  border-left: 1px solid var(--rule);
 }
 
 /* .rail__scale
-   Div Block · Position: Absolute · the ruled edge
-   Embed needed: repeating-linear-gradient. A tick every 12px — an actual
-   scale, the way a drawing's margin is ruled. */
+   Embed needed: an inline SVG. The margin's whole ruled edge — the boundary
+   line and a graduation every 12px, the way a drawing's margin is ruled. Drawn
+   as paths rather than a border and a repeating gradient, because the lamp's
+   light shortens the graduations (see Rails.jsx and components/cord). Overflow
+   is left visible so the edge stroke is not clipped at the SVG's own 5px; the
+   rail's clip-path is what keeps the drawing inside the viewport. */
 .rail__scale {
   position: absolute;
   top: 0;
-  bottom: 0;
   width: 5px;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    var(--rule) 0,
-    var(--rule) 1px,
-    transparent 1px,
-    transparent 12px
-  );
+  overflow: visible;
   opacity: 0.85;
+}
+
+/* .rail__edge
+   The boundary line itself — the edge of the page. One pixel, exactly where
+   the border used to be. Always straight. */
+.rail__edge {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+/* .rail__tick
+   One graduation. Its `d` is rewritten by the lamp while its light is on it. */
+.rail__tick {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1;
 }
 
 .rail--left .rail__scale { right: 0; }

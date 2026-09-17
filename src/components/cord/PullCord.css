@@ -1,0 +1,166 @@
+/**
+ * The lamp — the light switch, out in the margin beyond the right rail.
+ *
+ * WEBFLOW HANDOFF
+ * One div, one inline SVG, one button. `.cord--visible`, `.cord--night` and
+ * `.cord--near` are combo classes toggled by script; the swing, the head, the
+ * light, its mask, and what the lamp does to the rail's ruled edge are all
+ * drawn by code and stay in code. See WEBFLOW.md.
+ */
+
+/* .cord
+   Div Block · Position: Fixed · top 0, right 0 · z-index 21 (just over the rails)
+   Room for the cord, the lamp and the note beside it. Takes no pointer events —
+   only the lamp's own button does. `--cord-length` is the cord's resting length
+   and is read by the code. */
+.cord {
+  --cord-length: clamp(104px, 15vh, 168px);
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 21;
+  width: calc(var(--rail) + 200px);
+  height: 360px;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+}
+
+/* .cord--visible  ·  combo class
+   Held back until the loader hands over, like the rails. */
+.cord--visible { visibility: visible; }
+
+/* .cord__wire — the drawing. User units are px. */
+.cord__wire {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* The cord. In the muted ink, not the rule's colour — a thing hanging in the
+   margin, not another ruled line. */
+.cord__line {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1;
+}
+
+/* --- the lamp --------------------------------------------------------------------
+   A socket, a bell of a shade, its open mouth, and the bulb hanging just out of
+   it. Lit, the mouth's inside catches the light and the bulb burns pale with a
+   wine edge; out, the inside goes dark and the bulb goes grey. */
+.cord__neck,
+.cord__shade {
+  fill: var(--ink);
+  transition: fill .45s;
+}
+.cord__mouth {
+  fill: var(--accent);
+  fill-opacity: .55;
+  stroke: var(--accent);
+  stroke-width: .7;
+  transition: fill .45s, fill-opacity .45s, stroke .45s;
+}
+.cord__bulb {
+  fill: url(#cord-bulb);
+  stroke: var(--accent);
+  stroke-width: .6;
+  transition: stroke .45s;
+}
+.cord__sheen {
+  fill: none;
+  stroke: var(--ground-raise);
+  stroke-width: .9;
+  stroke-linecap: round;
+  opacity: .32;
+  transition: opacity .45s;
+}
+
+.cord--night .cord__neck,
+.cord--night .cord__shade { fill: var(--ink-2); }
+.cord--night .cord__mouth { fill: var(--ground); fill-opacity: .9; stroke: var(--ink-3); }
+.cord--night .cord__bulb { stroke: none; }
+.cord--night .cord__sheen { opacity: 0; }
+
+/* --- the light -------------------------------------------------------------------
+   A soft pool under the bulb and a bloom around it. The script sets the whole
+   group's brightness and turns it with the lamp; the mask keeps it inside the
+   margin. These rules carry only colour. */
+.cord__light { pointer-events: none; }
+.cord__pool { fill: url(#cord-pool); }
+.cord__bloom { fill: url(#cord-bloom); }
+
+/* The gradient stops. Declared here rather than on the elements so both schemes
+   reach them: `var()` belongs in CSS, not in a presentation attribute. */
+.cord__stop { stop-color: var(--accent); }
+.cord__stop--pool { stop-opacity: .3; }
+.cord__stop--pool-mid { stop-opacity: .12; }
+.cord__stop--bloom { stop-opacity: .5; }
+.cord__stop--out { stop-opacity: 0; }
+/* The bulb: a pale core with a warm edge by day; a cold grey glass by night. */
+.cord__stop--filament { stop-color: var(--ground-raise); stop-opacity: 1; }
+.cord__stop--glass { stop-color: var(--accent); stop-opacity: .55; }
+.cord--night .cord__stop--filament { stop-color: var(--ink-3); stop-opacity: .5; }
+.cord--night .cord__stop--glass { stop-color: var(--ink-3); stop-opacity: .35; }
+
+/* .cord__hit
+   Button · Position: Absolute · 44 × 44, carried along by the lamp's head. The
+   only thing here that takes the pointer; what you see under it is the shade. */
+.cord__hit {
+  position: absolute;
+  top: -22px;
+  left: -22px;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: grab;
+  touch-action: none;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.cord__hit:active { cursor: grabbing; }
+.cord__hit:focus-visible { outline: 1.5px dashed var(--accent); outline-offset: -3px; }
+
+/* .cord__note
+   What the pull will do, written small and clear of the lamp once a pointer is
+   near enough to be reaching for it. Plain words, lower case, muted ink. */
+.cord__note {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 4px);
+  transform: translateY(-50%) translateX(6px);
+  white-space: nowrap;
+  font-size: var(--step-mono);
+  letter-spacing: .01em;
+  color: var(--ink-3);
+  opacity: 0;
+  transition: opacity .25s, transform .35s;
+  pointer-events: none;
+}
+.cord--near .cord__note,
+.cord__hit:focus-visible .cord__note {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* Phones: no hover to speak of, so no note, and a shorter cord so the lamp
+   hangs clear below the header row. The head is sized to the margin by code. */
+@media (max-width: 700px) {
+  .cord {
+    --cord-length: clamp(96px, 13vh, 132px);
+    width: calc(var(--rail) + 150px);
+  }
+  .cord__note { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cord__neck, .cord__shade, .cord__mouth, .cord__bulb, .cord__sheen, .cord__note { transition: none; }
+}

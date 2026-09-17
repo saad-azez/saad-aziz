@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import Rails from '../components/hero/Rails.jsx';
+import PullCord from '../components/cord/PullCord.jsx';
 import Hero from '../components/hero/Hero.jsx';
 import Loader from '../components/loader/Loader.jsx';
 import { createLoadTracker } from '../lib/loadTracker.js';
@@ -25,6 +26,7 @@ export default function HeroRoute() {
   return (
     <>
       <Rails visible={revealed} />
+      <PullCord visible={revealed} />
       <main className="site-shell" id="top">
         <Hero reveal={revealed} animateText={!loading} onReady={onReady} />
       </main>

@@ -30,7 +30,7 @@ export default class WordmarkScene {
     this.letters = [];
     this.bodies = [];
     this.font = new FontLoader().parse(typeface);
-    this.gap = WORDMARK.capHeight * .022;
+    this.gap = WORDMARK.capHeight * .018;
     const gap = this.gap;
     let cursor = 0;
     WORDMARK.letters.forEach(letter => {
@@ -73,7 +73,7 @@ export default class WordmarkScene {
       const bounds = new THREE.Box3().setFromObject(glyph);
       // Use the visible bounds after the slight turn, including the bevels,
       // rather than the font's unequal side bearings and kerning pairs.
-      glyph.position.x = letter.origin !== undefined ? letter.origin + centre.x : cursor - bounds.min.x;
+      glyph.position.x = cursor - bounds.min.x;
       cursor += bounds.max.x - bounds.min.x + gap;
       this.word.add(glyph);
       this.letters.push(glyph);
@@ -144,7 +144,6 @@ export default class WordmarkScene {
 
   render() {
     if (this.disposed) return;
-    this.sequence?.updateStarClip();
     this.renderer.render(this.scene, this.camera);
   }
 

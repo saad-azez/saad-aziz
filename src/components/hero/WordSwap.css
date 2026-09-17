@@ -1,0 +1,6 @@
+.word-swap { white-space: nowrap; }
+.word-swap__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.word-swap__stage { display: inline-grid; vertical-align: baseline; }
+.word-swap__word { grid-area: 1 / 1; justify-self: start; width: max-content; white-space: nowrap; overflow: clip; }
+.word-swap__letter { display: inline-block; white-space: pre; }
+.word-swap__word + .word-swap__word .word-swap__letter { opacity: 0; visibility: hidden; }

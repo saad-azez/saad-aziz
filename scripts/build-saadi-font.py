@@ -26,7 +26,7 @@ for glyph in glyphs:
 builder.setupCFF('SAADiDisplay-Regular', dict(FullName='SAADi Display Regular', FamilyName='SAADi Display', Weight='Regular'), charstrings, {})
 builder.setupHorizontalMetrics(metrics)
 builder.setupHorizontalHeader(ascent=1050, descent=-200)
-builder.setupNameTable(dict(familyName='SAADi Display', styleName='Regular', uniqueFontIdentifier='SAADiDisplay-Regular-1.2', fullName='SAADi Display Regular', psName='SAADiDisplay-Regular', version='Version 1.2'))
+builder.setupNameTable(dict(familyName='SAADi Display', styleName='Regular', uniqueFontIdentifier='SAADiDisplay-Regular-1.4', fullName='SAADi Display Regular', psName='SAADiDisplay-Regular', version='Version 1.4'))
 builder.setupOS2(sTypoAscender=1050, sTypoDescender=-200, usWinAscent=1050, usWinDescent=200, sCapHeight=1000, sxHeight=660)
 builder.setupPost()
 output = ROOT / 'public/fonts/SAADiDisplay-Regular.otf'

@@ -22,6 +22,10 @@
  */
 
 :root {
+  /* The 3D book's plain materials: its boards, its spine, the paper inside. */
+  --book-board: #733d49;
+  --book-spine: #512b3c;
+  --book-paper: #f2efeb;
   color-scheme: light;
 
   /* --- ground: porcelain ------------------------------------------------ */
@@ -93,6 +97,12 @@
   --frame-inset: calc(var(--rail) + var(--gutter));
 }
 
+/* Phones (upright or held sideways): no drafting rails (Rails.css). Every pixel of the width goes to the book, its
+   stickers and the work; the margin is the gutter alone. Tablets and up keep them. */
+@media (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
+  :root { --rail: 0px; }
+}
+
 /* The same roles, by night. Nothing else changes: the type, the spacing and
    the layout are scheme-blind. */
 :root[data-scheme="night"] {
@@ -120,3 +130,4 @@
     --figure-bounce: #8b6b7c;
     --figure-highlight: #ffffff;
 }
+

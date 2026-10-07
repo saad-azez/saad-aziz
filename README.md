@@ -85,7 +85,6 @@ the hero's layout or wordmark position. Reduced motion uses a simultaneous fade.
   `WORDMARK_FONT` and `WORDMARK` override the face and the word.
 
 The scene renders during the entrance, then only on mount, resize and colour-scheme changes.
-Use `?loader=8000` to hold the loading screen for eight seconds.
 
 
 The live page is the loader and hero only. Contact links use `saad.azieiz@gmail.com`. The signature has a traced high-contrast serif base, a sculpted variable-width S, pearl and rose-metal material studies, a directional wireframe dissolve, and smoothly packed horizontal substitutions. Playback takes 3.69 seconds after the loader aperture; replay starts immediately. Reduced-motion visitors see the resting word. No runtime dependencies were added.

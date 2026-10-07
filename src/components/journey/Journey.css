@@ -1,0 +1,78 @@
+/**
+ * Journey — the hero and the work on one pinned screen.
+ *
+ * WEBFLOW HANDOFF
+ * `.journey` is a tall section; `.journey__pin` inside it is Position: Sticky,
+ * top 0, height 100vh, overflow hidden. The hero and the work frame are both
+ * Position: Absolute, inset 0, in that pinned box. `data-phase` on the
+ * section controls pointer access; reveal variables control the crossfade.
+ */
+
+.journey {
+  --work-reveal: 0;
+  --title-reveal: 0;
+  --names-reveal: 0;
+  --details-reveal: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.journey__pin {
+  position: sticky;
+  top: 0;
+  /* The full screen height (the large viewport), which never changes as a phone's address bar comes and goes,
+     so nothing in it moves or stretches mid-scroll and no strip of the page shows under it (lib/viewport). */
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* The hero fills the pinned screen instead of the page. */
+.journey__pin > .hero {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+/* The coin and both sections share one reversible, scroll-driven transition:
+   the coin lands and opens a window onto the work around itself, which grows
+   until it is the screen. The hero is never dimmed or shrunk: it is covered,
+   and only then taken away.
+
+   The header (logo, clock, Let's talk) is the site's, fixed over every
+   chapter (components/header); the hero keeps only its room. */
+.journey__pin > .work {
+  /* The hero's lit wall (webgl/backdrop.js), in CSS: the same centre, falloff
+     and tokens, mixed in linear light as the shader mixes them — so the window
+     looks through into the same room, not into a hole. */
+  background:
+    radial-gradient(circle at 50% 48%, transparent 45svh,
+      color-mix(in srgb-linear, var(--ground-edge) 30%, transparent) 80svh,
+      color-mix(in srgb-linear, var(--ground-edge) 60%, transparent) 115svh),
+    radial-gradient(circle at 50% 48%,
+      color-mix(in srgb-linear, var(--ground-glow) 70%, var(--ground)) 0,
+      color-mix(in srgb-linear, var(--ground-glow) 48%, var(--ground)) 50svh,
+      color-mix(in srgb-linear, var(--ground-glow) 25%, var(--ground)) 80svh,
+      var(--ground) 120svh);
+  background-color: var(--ground);
+  clip-path: circle(var(--lens-r, 0px) at var(--lens-x, 50%) var(--lens-y, 50%));
+}
+.journey[data-phase="work"] > .journey__pin > .work { clip-path: none; }
+.journey[data-phase="work"] > .journey__pin > .hero { visibility: hidden; pointer-events: none; }
+.journey[data-phase="hero"] > .journey__pin > .work { pointer-events: none; }
+
+/* The window's rim: one hairline, the width of the page's rules. */
+.journey__lens {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  width: calc(var(--lens-r, 0px) * 2);
+  height: calc(var(--lens-r, 0px) * 2);
+  border: 1px solid var(--ink-3);
+  border-radius: 50%;
+  opacity: var(--lens-line, 0);
+  transform: translate(calc(var(--lens-x, 0px) - var(--lens-r, 0px)), calc(var(--lens-y, 0px) - var(--lens-r, 0px)));
+  pointer-events: none;
+}
+.journey[data-phase="work"] .journey__lens { display: none; }

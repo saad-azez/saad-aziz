@@ -1,0 +1,77 @@
+/*
+ * The page lifted out of the book (PageViewer.jsx): a sheet of the book's own
+ * paper over everything (the stage's canvas is z 25, the rope's hold 26), the
+ * site on it to scroll through. The paper and its ink are the book's, not the
+ * page's scheme: the book is a real object and keeps its own colours.
+ */
+.page-viewer {
+  --paper: #f4efe6;
+  --paper-edge: #e4dccf;
+  --paper-ink: #2a2228;
+  --paper-ink-2: #6b5f66;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  /* One cell the size of the screen (less its margin): the sheet fits in it, the site scrolling inside the sheet. */
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  place-items: center;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  perspective: 1200px;
+  /* Nothing on it scrolls the page under it: only the site on the sheet scrolls, and only itself. */
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+/* Coming up out of the book: nothing on it can be touched yet (PageViewer, data-arriving). */
+.page-viewer[data-arriving] .page-viewer__sheet, .page-viewer[data-arriving] .page-viewer__backdrop { pointer-events: none; }
+/* (No blur under it: a full-screen backdrop filter is more than a phone has the memory for, over WebGL.) */
+.page-viewer__backdrop { position: absolute; inset: 0; grid-area: 1 / 1; background: color-mix(in srgb, var(--ground) 92%, transparent); }
+.page-viewer__sheet {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(100%, 560px);
+  height: 100%;
+  max-height: 920px;
+  padding: 18px 16px 14px;
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--paper-ink);
+  /* A sheet held up: lifted off whatever is under it, its edge catching the light. */
+  box-shadow: 0 1px 0 #fff inset, 0 0 0 1px var(--paper-edge), 0 30px 60px -20px rgba(10, 6, 12, .55), 0 12px 24px -12px rgba(10, 6, 12, .35);
+  transform-origin: 50% 60%;
+  will-change: transform;
+}
+.page-viewer__head { position: relative; padding: 0 44px 12px 2px; }
+.page-viewer__count { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--paper-ink-2); }
+.page-viewer__count span { opacity: .6; }
+.page-viewer__title { margin: 0; font: 400 clamp(28px, 8vw, 40px)/1 var(--font-display); color: var(--paper-ink); }
+.page-viewer__role { margin: 6px 0 0; font-size: 13px; font-weight: 500; color: var(--paper-ink-2); }
+/* Put it back: a round button in the logo's ring, like every button on the site (RingButton). */
+.page-viewer__close { position: absolute; top: -4px; right: -2px; --ring-size: 42px; font-size: 22px; font-weight: 300; }
+/* The site, top to bottom, in a window in the page: scrolled with the finger, its own scroll only. */
+.page-viewer__site {
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 4px;
+  background: #e9e2d6;
+  box-shadow: 0 0 0 1px var(--paper-edge), 0 2px 10px -4px rgba(20, 10, 20, .25) inset;
+}
+.page-viewer__site img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; }
+.page-viewer__site:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
+.page-viewer__pending { position: absolute; top: 12px; left: 12px; margin: 0; padding: 6px 10px; border-radius: 999px; background: var(--paper); font-size: 12px; color: var(--paper-ink-2); }
+.page-viewer__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 12px; }
+/* The book's own ink on its paper, whatever the page's scheme. */
+.page-viewer .ring-btn { --ink: var(--paper-ink); --ring-ink: var(--paper-ink); --ground: var(--paper); color: var(--paper-ink); }
+.page-viewer__step { --ring-size: 44px; font-size: 16px; }
+.page-viewer__soon { font-size: 13px; color: var(--paper-ink-2); }
+@media (prefers-reduced-motion: reduce) {
+  .page-viewer__sheet { will-change: auto; }
+}
+
+/* The drawing put away under it (DotStage suspend): its canvases, shrunk to a pixel, are not shown at all. */
+html.is-suspended .stage, html.is-suspended .hero__canvas { visibility: hidden; }

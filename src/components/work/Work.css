@@ -1,0 +1,320 @@
+/*
+ * Work â€” one pinned screen: the rolodex of projects (drawn by the stage into
+ * .work__stage) and the project it has landed on. The coin sits on the tools
+ * rope (.work__rope: the scroll rope comes in along it and the coin balances on it). The layout, .work--centre: the
+ * rolodex in the middle, the name on the left, the rest on the right.
+ *
+ * Reading order: the count, the name, what I did (role), what it is (summary),
+ * what it was made with, who it was made with, and the way to the real site.
+ */
+.work {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: clamp(28px, 4vw, 72px);
+  /* Below the site header, which stays on top (--site-header, measured by Journey). */
+  /* (Clear at the bottom of the strip a phone's address bar can cover: the pinned screen is the full height, Journey.css.) */
+  --bar: calc(100vh - 100svh);
+  padding: calc(var(--site-header, 0px) + clamp(16px, 2.6svh, 32px)) var(--frame-inset) calc(clamp(18px, 3svh, 36px) + var(--bar));
+}
+.work__header { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; gap: 24px; }
+.work__title { margin: 0; font: 400 clamp(26px, 2.5vw, 40px)/1.05 var(--font-editorial); color: var(--ink); letter-spacing: -.02em; }
+/* The rolodex's room: the stage draws it centred here. It is taken in the hand (drag to turn, flick to spin); resting over it, the page on show comes out. */
+/* On a touch screen the finger is shared with the page's scroll by the touch's first move (Work.jsx), not by touch-action. */
+.work__stage { min-height: 0; cursor: grab; touch-action: auto; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+/*
+ * The shut book's own hold: over it where it stands (DotStage shutBox, told by the journey: --shut-y, --shut-w,
+ * --shut-h; a little wider, for a book turned in the hand), over everything else in the work, and on only while
+ * it can be picked up (data-holdable). On a phone the open book's room is a strip at the top, nowhere near where
+ * the shut book stands. On a touch screen: a sticker goes with the finger any way; elsewhere a touch that starts
+ * across turns the book, one that starts up or down is still the page's own scroll (Work.jsx).
+ */
+.work__hold { position: absolute; left: 50%; top: var(--shut-y, 50%); z-index: 3; width: calc(var(--shut-w, 0px) * 1.15); height: calc(var(--shut-h, 0px) * 1.04);
+  translate: -50% -50%; pointer-events: none; cursor: grab; touch-action: auto; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.journey[data-holdable="true"] .work__hold { pointer-events: auto; }
+/*
+ * "Look closer": on a touch screen, where the open book is small, the way to lift its page out (PageViewer). At the
+ * foot of the book's room (Journey: --room-x, --room-bottom), once the book is open and the project in. A button
+ * like every other on the site (RingButton: the logo's ring, the ↗ of "Visit site"), on the ground's colour so it
+ * reads over the pages. Never on a screen with a pointer that hovers: the book is big enough there.
+ */
+.work__peek { display: none; }
+@media (hover: none) {
+  .work__peek {
+    --ring-size: 38px;
+    position: absolute; z-index: 3; left: var(--room-x, 50%); top: var(--room-bottom, 50%);
+    display: inline-flex; translate: -50% -100%; padding: 0 1.4em;
+    border-radius: 999px; background: var(--ground); font-size: 14px;
+    opacity: 0; pointer-events: none; transition: opacity .4s ease;
+  }
+  .journey.is-revealed .work__peek { opacity: 1; pointer-events: auto; }
+}
+.work[data-dragging="true"] .work__stage, .work[data-dragging="true"] .work__hold { cursor: grabbing; }
+
+/* The centred version: the name on the left, the rolodex in the middle, the rest on the right. */
+/* The two text columns are the same width, so the rolodex is in the middle of the screen. */
+.work--centre { grid-template-columns: minmax(250px, .7fr) minmax(0, 1.6fr) minmax(250px, .7fr); }
+.work--centre .work__name { font-size: clamp(40px, 4.4vw, 80px); }
+.work__lead { align-self: center; min-width: 0; padding: 24px 0; }
+
+
+.work__header, .work__copy, .work__lead { opacity: var(--entry); transform: translateY(calc((1 - var(--entry)) * 22px)); }
+.work__header { --entry: var(--title-reveal, 0); }
+.work__copy, .work__lead { --entry: var(--names-reveal, 0); }
+.work__copy { align-self: center; min-width: 0; padding: 24px 0; position: relative; }
+/*
+ * The lines about the shut book, either side of it where it stands in the middle of the room under the
+ * header. The room starts at --shut-top and the gap between them is the shut book's size, both as the stage
+ * draws it (DotStage shutBox, told by the journey: --shut-w, --shut-h, --shut-top), whatever the screen.
+ */
+.work__intro {
+  --book-w: var(--shut-w, min(37.5svh, 60vw));
+  --book-h: var(--shut-h, min(60svh, 96vw));
+  --intro-gap: clamp(20px, 3.5vw, 64px);
+  --reveal: var(--intro-reveal, 0);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc(var(--book-w) + 2 * var(--intro-gap)) minmax(0, 1fr);
+  align-items: center;
+  padding: var(--shut-top, var(--site-header, 0px)) var(--frame-inset) calc(100vh - 100svh);
+  pointer-events: none;
+}
+.work__intro-side { min-width: 0; }
+.work__intro-side--start { grid-column: 1; justify-self: end; text-align: right; }
+.work__intro-side--start .work__intro-lead { margin: 0 0 0 auto; }
+.work__intro-side--end { grid-column: 3; justify-self: start; }
+.work__intro-lead { margin: 0 0 18px; font: 400 clamp(40px, 4.2vw, 72px)/1.02 var(--font-editorial); color: var(--ink); letter-spacing: -.02em; max-width: 12ch; }
+.work__intro-body { margin: 0 0 14px; color: var(--ink-2); font-size: clamp(16px, 1.25vw, 19px); line-height: 1.6; max-width: 36ch; }
+.work__intro-hint { margin: 0; color: var(--ink); font-size: clamp(14px, 1.05vw, 16px); line-height: 1.6; max-width: 36ch; }
+.work__intro-hint + .work__intro-hint { margin-top: 6px; color: var(--ink-2); }
+/* Over a sticker on the book: it can be peeled off. */
+.work[data-sticker="true"] .work__stage, .work[data-link="true"] .work__stage,
+.work[data-sticker="true"] .work__hold, .work[data-link="true"] .work__hold { cursor: pointer; }
+/* The nudge: what to do with the shut book, a hint chip beside it, coming in with the lines and leaving with them. */
+.work__nudge { margin: 0 0 18px; opacity: calc(clamp(0, calc(var(--reveal) * 3 - .4), 1) * (1 - clamp(0, calc(var(--leave, 0) * 2.5), 1)));
+  translate: calc(clamp(0, calc(var(--leave, 0) * 2.5), 1) * 64px) calc((1 - clamp(0, calc(var(--reveal) * 3 - .4), 1)) * 10px); }
+/* Words that rise one after another with their line's reveal (--reveal), and fall back the same way. */
+.work__words .w { display: inline-block; white-space: pre; --t: clamp(0, calc(var(--reveal, 1) * 2.7 - var(--i) * .03), 1);
+  opacity: var(--t); transform: translateY(calc((1 - var(--t)) * .6em)) rotate(calc((1 - var(--t)) * 3deg)); filter: blur(calc((1 - var(--t)) * 6px)); }
+.work__title.work__words { --reveal: var(--title-reveal, 0); }
+/*
+ * Out of the way before the book opens (--leave-reveal, coinTransition LEAVE): the lines either side slide off
+ * outward, away from the book, a word at a time from the first, tipping and blurring as they go (above and below
+ * it on a narrow screen: up and down). The book only starts to open once they have gone; scrolled back, they
+ * come back the same way once it has shut.
+ */
+.work__intro { --leave: var(--leave-reveal, 0); }
+/* Gone outright once they have moved out (or before they come in): Journey sets data-intro. */
+.journey[data-intro="false"] .work__intro { visibility: hidden; }
+.work__intro .w {
+  --o: clamp(0, calc(var(--leave) * 1.7 - var(--i) * .015), 1);
+  opacity: calc(var(--t) * (1 - var(--o)));
+  transform: translate(calc(var(--o) * var(--out-x, 0px)), calc((1 - var(--t)) * .6em + var(--o) * var(--out-y, 0px)))
+    rotate(calc((1 - var(--t)) * 3deg + var(--o) * var(--out-r, 0deg)));
+  filter: blur(calc((1 - var(--t)) * 6px + var(--o) * 4px));
+}
+.work__intro-side--start { --out-x: -64px; --out-r: -5deg; }
+.work__intro-side--end { --out-x: 64px; --out-r: 5deg; }
+/* No room either side of it on a narrow or upright screen: above and below it instead. */
+@media (max-width: 600px), (max-aspect-ratio: 4/5) {
+  .work__intro { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) calc(var(--book-h) + 2 * var(--intro-gap)) minmax(0, 1fr); --intro-gap: clamp(10px, 1.8svh, 24px); }
+  .work__intro-side { justify-self: center; text-align: center; }
+  .work__intro-side--start { grid-column: 1; grid-row: 1; align-self: end; }
+  .work__intro-side--start .work__intro-lead { margin: 0 auto; }
+  .work__intro-side--end { grid-column: 1; grid-row: 3; align-self: start; }
+  .work__intro-side--start { --out-x: 0px; --out-y: -40px; --out-r: -3deg; }
+  .work__intro-side--end { --out-x: 0px; --out-y: 40px; --out-r: 3deg; }
+  .work__intro-body, .work__intro-hint { margin-left: auto; margin-right: auto; }
+  .work__nudge { display: none; }
+}
+@media (max-width: 600px) {
+  /* The book as big as the screen allows, its stickers with it (DotStage SHUT): above it the line about it, below it
+     only what to do with it. */
+  .work__intro-body { display: none; }
+  .work__intro-lead { font-size: 30px; margin-bottom: 8px; max-width: none; }
+  .work__intro-body { font-size: 13px; line-height: 1.5; margin-bottom: 6px; }
+  .work__intro-hint { font-size: 13px; line-height: 1.5; }
+  .work__nudge { display: none; }
+}
+.work__projects { display: grid; }
+.work__project { grid-area: 1 / 1; min-width: 0; visibility: hidden; }
+.work__project:first-child { visibility: visible; }
+.work__name { margin: 0 0 14px; font: 400 clamp(48px, 5.4vw, 92px)/.95 var(--font-display); letter-spacing: 0; }
+.work__word { display: inline-block; transform-origin: 0 100%; }
+.work__role { margin: 0 0 18px; color: var(--ink); font-size: clamp(16px, 1.25vw, 19px); font-weight: 500; line-height: 1.35; letter-spacing: -.01em; }
+/* The summary and the rope under it share one measure, so the rope spans the text it is under, post to post. */
+.work__summary, .work__made { max-width: 44ch; font-size: clamp(15px, 1.12vw, 17px); }
+.work__summary { margin: 0; color: var(--ink-2); line-height: 1.65; }
+/* Its words step onto their lines one after another as it comes in, as onto a rope: down onto their feet, tipping
+   one way and the other as they come (and with a wobble, by Work.jsx, when another project comes round). */
+.work__summary .w { display: inline-block; white-space: pre; transform-origin: 50% 100%;
+  --t: clamp(0, calc(var(--details-reveal, 0) * 2.4 - var(--i) * .022), 1);
+  opacity: var(--t); transform: translateY(calc((1 - var(--t)) * -.5em)) rotate(calc((1 - var(--t)) * 7deg)); }
+.work__summary .w:nth-child(odd) { transform: translateY(calc((1 - var(--t)) * -.5em)) rotate(calc((1 - var(--t)) * -8deg)); }
+.work__made { margin: 24px 0 0; }
+/* The rope's lane: the stage stretches the scroll rope along its foot, from post to post, and the coin walks it. */
+.work__rope { height: clamp(64px, 6vw, 92px); }
+/*
+ * The tools hang from the rope as tags on threads, each where the coin stops over it (DotStage station: evenly
+ * along the rope, .08 of it clear of each post), sagging with the rope as it gives under the coin (--rope-c, --rope-dip, --rope-droop from the
+ * stage: the same sum as the rope's own, ropeDissolve ROPE_SAG). More than three take turns, short thread and long,
+ * so their names never run into each other. The one on the coin's face is lit, and swings as the coin comes over it.
+ */
+.work__tools { --n: 1; position: relative; height: 2.9em; padding: 0; margin: 0; list-style: none; font-size: 11px; opacity: var(--details-reveal, 0); }
+.work__tools[data-many="true"] { height: 4.55em; }
+/* The posts the rope is tied to, at its two ends: a pole with a knob on top, a little above the rope. */
+.work__tools::before, .work__tools::after { content: ''; position: absolute; top: -12px; bottom: 4px; width: 7px;
+  background: radial-gradient(circle at 50% 3.5px, var(--ink-3) 0 3px, transparent 3.5px), linear-gradient(var(--ink-3), var(--ink-3)) 50% 0 / 2px 100% no-repeat;
+  opacity: .7; }
+.work__tools::before { left: -3.5px; }
+.work__tools::after { right: -3.5px; }
+.work__tool {
+  --s: calc(.08 + .84 * (var(--i, 0) + .5) / var(--n));
+  --c: clamp(.02, var(--rope-c, .5), .98);
+  position: absolute; top: -3px; left: calc(var(--s) * 100%);
+  translate: -50% calc((var(--rope-dip, 0) * min(var(--s) / var(--c), (1 - var(--s)) / (1 - var(--c))) + var(--rope-droop, 0) * 4 * var(--s) * (1 - var(--s))) * 1px);
+  transform-origin: 50% 0;
+  color: var(--ink-3); transition: color .35s ease;
+}
+.work__tools[data-many="true"] .work__tool:nth-child(even) { --thread: 2.2em; }
+/* Its thread from the rope, and its tag on the end of it; it drops onto its thread as the copy comes in. */
+.work__hang { display: flex; flex-direction: column; align-items: center; transform-origin: 50% 0;
+  --t: clamp(0, calc(var(--details-reveal, 0) * 2.2 - .5 - var(--i, 0) * .12), 1);
+  opacity: var(--t); transform: translateY(calc((1 - var(--t)) * -12px)) rotate(calc((1 - var(--t)) * 10deg)); }
+.work__hang::before { content: ''; width: 1px; height: var(--thread, .75em); background: currentColor; opacity: .55; transition: height .4s ease; }
+.work__tag { font-weight: 600; letter-spacing: .14em; text-transform: uppercase; line-height: 1.4; white-space: nowrap; padding-top: 2px; }
+.work__tool[data-on="true"] { color: var(--accent); animation: work-tag-swing 1.8s cubic-bezier(.25, .7, .35, 1); }
+/* The coin's weight over it: its thread pulled a little longer. */
+.work__tool[data-on="true"] .work__hang::before { opacity: .9; height: calc(var(--thread, .75em) + 3px); }
+@keyframes work-tag-swing {
+  0% { rotate: 0deg; }
+  14% { rotate: 11deg; }
+  32% { rotate: -7deg; }
+  50% { rotate: 4deg; }
+  68% { rotate: -2deg; }
+  84% { rotate: .8deg; }
+  100% { rotate: 0deg; }
+}
+.work__also { margin: 12px 0 0; color: var(--ink-3); font-size: 13px; }
+.work__credit { margin: 12px 0 0; color: var(--ink-2); font-size: 14px; }
+.work__credit a { color: var(--ink); text-decoration-color: var(--rule); text-underline-offset: 5px; }
+.work__actions { margin-top: clamp(18px, 2.8svh, 30px); }
+.work__nav { display: flex; gap: 14px; margin-top: clamp(18px, 3svh, 32px); }
+.work__step { --ring-size: 46px; font-size: 17px; }
+.work button:focus-visible { outline: 1px solid var(--accent); outline-offset: 5px; }
+
+@media (max-width: 900px) {
+  .work { grid-template-columns: minmax(0, 1fr) minmax(240px, .9fr); column-gap: 20px; }
+  .work--centre { grid-template-columns: minmax(150px, .6fr) minmax(0, 1.2fr) minmax(200px, .8fr); }
+  .work__summary { font-size: 14px; line-height: 1.6; }
+}
+/* Tablets held upright: the book above the project, as on a phone, but at the full type sizes; under it, the
+   name on the left and the rest of the project beside it, so the copy is short and the book has the height. */
+@media (min-width: 601px) and (max-width: 1100px) and (max-aspect-ratio: 4/5) {
+  .work, .work--centre { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; row-gap: clamp(12px, 2svh, 28px); }
+  .work--centre { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); grid-template-rows: auto minmax(0, 1fr) auto; column-gap: clamp(24px, 4vw, 48px); }
+  .work--centre .work__stage { grid-column: 1 / -1; grid-row: 2; }
+  .work--centre .work__lead { grid-column: 1; grid-row: 3; align-self: start; padding: 0; }
+  .work--centre .work__copy { grid-column: 2; grid-row: 3; align-self: start; }
+  .work__copy { padding: 0 0 8px; }
+  .work__summary, .work__made { max-width: 60ch; }
+}
+@media (max-width: 600px) {
+  .work, .work--centre { grid-template-columns: 1fr; grid-template-rows: auto minmax(150px, 1fr) auto; gap: 8px; padding-top: calc(var(--site-header, 0px) + 14px); padding-bottom: calc(24px + var(--bar)); }
+  .work--centre { grid-template-rows: auto minmax(130px, 1fr) auto auto; }
+  .work__lead { order: 2; padding: 0; }
+  /* The names take the room of the longest (all are laid in one place): a short one sits on the copy, the room left over goes under the book. */
+  .work__lead .work__projects { align-items: end; }
+  .work--centre .work__stage { order: 1; }
+  .work--centre .work__copy { order: 3; }
+  .work--centre .work__name { font-size: clamp(34px, 10vw, 48px); }
+  .work__title { font-size: 24px; }
+  .work__copy { padding: 0; }
+    .work__name { margin-bottom: 6px; font-size: clamp(34px, 10vw, 48px); }
+  .work__role { margin-bottom: 8px; font-size: 14px; }
+  .work__summary { max-width: none; font-size: 13px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .work__made { margin-top: 12px; max-width: none; }
+  .work__rope { height: 58px; }
+  .work__also, .work__credit { font-size: 11px; }
+  .work__actions { margin-top: 12px; }
+  /* The arrows on the row of the way to the site, at its right, for the height (with no way to the site, room is kept for them). */
+  .work__nav { position: absolute; right: 0; bottom: 0; margin: 0; }
+  /* The projects' copy is all laid in one place, as tall as the longest: the way to the site goes to the foot of
+     it in every one, on the arrows' row, and any room left over is between it and the rest. */
+  .work__copy .work__project { display: flex; flex-direction: column; }
+  .work__copy .work__actions { margin-top: auto; padding-top: 12px; }
+  .work__copy .work__project:not(:has(.work__actions)) { padding-bottom: 52px; }
+  .work__step { --ring-size: 40px; font-size: 15px; }
+}
+@media (max-height: 700px) and (min-width: 601px) {
+  .work__name { font-size: 44px; margin-bottom: 8px; }
+  .work__summary { font-size: 14px; line-height: 1.55; }
+  .work__made { margin-top: 12px; }
+}
+/* Small phones: less of everything, and the last line about the shut book left out. */
+@media (max-width: 600px) and (max-height: 700px) {
+  .work__intro-lead { font-size: 26px; }
+  .work__intro-body { font-size: 12px; }
+  .work__intro-hint { font-size: 12px; }
+  .work__intro-hint + .work__intro-hint { display: none; }
+  .work--centre .work__name, .work__name { font-size: 30px; margin-bottom: 4px; }
+  .work__role { margin-bottom: 6px; font-size: 13px; }
+  .work__summary { font-size: 12.5px; -webkit-line-clamp: 2; }
+  .work__rope { height: 50px; }
+}
+/*
+ * Phones held sideways: hardly any height. The work's title goes over the name only, so the book and the
+ * project's copy have the whole height under the site header; the summary is a few lines, the rope, its tags
+ * and the buttons are tighter, and the lines about the shut book smaller.
+ */
+@media (max-height: 520px) and (orientation: landscape) {
+  .work { padding-top: calc(var(--site-header, 0px) + 8px); padding-bottom: calc(10px + var(--bar)); }
+  .work__header { grid-column: 1; grid-row: 1; }
+  .work__title { font-size: 22px; }
+  .work__lead { grid-column: 1; grid-row: 2; padding: 0; }
+  .work--centre .work__stage { grid-column: 2; grid-row: 1 / -1; }
+  .work--centre .work__copy { grid-column: 3; grid-row: 1 / -1; padding: 0; }
+  .work--centre .work__name { font-size: clamp(26px, 4.4vw, 40px); margin-bottom: 4px; }
+  .work__role { margin: 0; font-size: 13px; }
+  .work__summary { font-size: 12px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .work__made { margin-top: 6px; }
+  .work__rope { height: 44px; }
+  .work__tools { font-size: 10px; }
+  .work__also, .work__credit { margin-top: 4px; font-size: 11px; }
+  .work__actions { margin-top: 8px; }
+  .work__actions .ring-btn--pill { --ring-size: 34px; font-size: 13px; }
+  .work__nav { margin-top: 8px; gap: 10px; }
+  .work__step { --ring-size: 34px; font-size: 14px; }
+  .work__intro-lead { font-size: clamp(24px, 4.4vw, 40px); }
+  .work__intro-body { margin-bottom: 8px; font-size: 13px; line-height: 1.5; }
+  .work__intro-hint { font-size: 12px; line-height: 1.45; }
+  .work__nudge { margin-bottom: 8px; font-size: 13px; }
+}
+/* Big screens: the type, the rope and the buttons go on growing with the screen, in proportion to the book. */
+@media (min-width: 1600px) {
+  .work__title { font-size: clamp(40px, 2.3vw, 60px); }
+  .work--centre .work__name { font-size: clamp(80px, 4.6vw, 120px); }
+  .work__role { font-size: clamp(19px, 1.05vw, 26px); }
+  .work__summary, .work__made { font-size: clamp(17px, 1vw, 24px); }
+  .work__rope { height: clamp(92px, 5vw, 128px); }
+  .work__tools { font-size: clamp(11px, .62vw, 16px); }
+  .work__also { font-size: clamp(13px, .7vw, 18px); }
+  .work__credit { font-size: clamp(14px, .75vw, 19px); }
+  .work__actions { font-size: clamp(16px, .85vw, 21px); }
+  .work__actions .ring-btn--pill { --ring-size: 2.75em; }
+  .work__step { --ring-size: clamp(46px, 2.5vw, 62px); font-size: clamp(17px, .9vw, 22px); }
+  .work__intro-lead { font-size: clamp(72px, 4.2vw, 108px); }
+  .work__intro-body { font-size: clamp(19px, 1.05vw, 26px); }
+  .work__intro-hint { font-size: clamp(16px, .9vw, 22px); }
+  .work__nudge { font-size: clamp(17px, .9vw, 22px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .work__header, .work__copy, .work__lead, .work__summary .w, .work__hang, .work__intro .w { transform: none; }
+  .work__intro .w { filter: none; }
+  .work__nudge { translate: none; }
+  .work__tool[data-on="true"] { animation: none; }
+}

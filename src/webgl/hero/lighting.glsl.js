@@ -10,7 +10,7 @@ vec3 shadeSurface(vec3 viewPosition, vec3 n) {
   float distribution = a2 / max(3.14159 * denom * denom, 0.001);
   float k = pow(uRoughness + 1.0, 2.0) / 8.0;
   float geometry = (nl / (nl * (1.0-k)+k)) * (nv / (nv * (1.0-k)+k));
-  vec3 fresnel = vec3(0.045) + vec3(0.955) * pow(1.0-vh, 5.0);
+  vec3 fresnel = vec3(0.045) + vec3(0.955) * pow(max(1.0-vh, 0.0), 5.0);
   vec3 specular = distribution * geometry * fresnel / max(4.0*nl*nv, 0.001);
   float fill = max(dot(n, normalize(vec3(0.8,-0.2,0.6))), 0.0);
   vec3 color = uColor * (0.46 + nl * 0.55 + fill * 0.11);
@@ -18,9 +18,10 @@ vec3 shadeSurface(vec3 viewPosition, vec3 n) {
   // Two large photographic softboxes: broad highlight on the shoulder,
   // narrow return on the edge. No external environment map is needed.
   vec3 reflected = reflect(-view, n);
-  float box1 = exp(-pow((reflected.x + 0.5) / 0.32, 6.0) - pow((reflected.y - 0.6) / 0.85, 6.0));
-  float box2 = exp(-pow((reflected.x - 0.85) / 0.10, 2.0) - pow(reflected.y / 1.3, 6.0));
-  float grazing = pow(1.0-nv, 3.0);
+  // GLSL pow is undefined for negative bases, even with an even exponent.
+  float box1 = exp(-pow(abs((reflected.x + 0.5) / 0.32), 6.0) - pow(abs((reflected.y - 0.6) / 0.85), 6.0));
+  float box2 = exp(-pow(abs((reflected.x - 0.85) / 0.10), 2.0) - pow(abs(reflected.y / 1.3), 6.0));
+  float grazing = pow(max(1.0-nv, 0.0), 3.0);
   color += uHighlight * (box1 * 0.12 + box2 * 0.08) * (0.35 + grazing);
   return color;
 }

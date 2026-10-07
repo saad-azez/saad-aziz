@@ -25,6 +25,8 @@ export default function WordSwap({ words, lead, label = words[0], play, hold = 2
     const fit = () => { if (live && !swap?.isActive()) gsap.set(stage, { width: width(index) }); };
 
     const next = () => {
+      // Covered by the work section, or the tab hidden: wait, without animating anything.
+      if (stage.closest('[data-phase="work"]') || document.hidden) { wait = gsap.delayedCall(hold, next); return; }
       const from = index;
       index = (index + 1) % slots.length;
       swap = reducedMotion

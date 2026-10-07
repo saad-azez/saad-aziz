@@ -11,7 +11,15 @@ const smooth = (a, b, t) => {
 const mix = THREE.MathUtils.lerp;
 
 export const D_DEFAULTS = { glow: .9, softness: 3.2, lift: 1.2, starSize: 1, rise: 1, spread: 1, spin: 1, stagger: .045 };
-export const SEQUENCE_BEATS = [[.233, .32], [.367, .34], [.50, .38], [.73, .48], [1.3, 1.15], [1.83, .62], [2.9, .82]];
+/**
+ * The short entrance (see brand/intro.js): the plain word, then straight to
+ * the rope and liquid dot. The material studies between are all still here, and play
+ * with `play(delay, { full: true })`. Each entry is [clock time, seconds]; a null seconds
+ * value jumps the clock there.
+ */
+export const SHORT_BEATS = [[.1, .3], [2.9, null]];
+
+export const SEQUENCE_BEATS = [[.233, .32], [.367, .34], [.50, .38], [.73, .48], [1.3, 1.15], [1.83, .62], [2.9, null]];
 
 // A single, seekable sequence. Times are relative to the plain word appearing
 // at 1.30s in Screen Recording 2026-09-12 223237 (30 fps). No entrance stagger.
@@ -353,7 +361,7 @@ export default class SignatureSequence {
   flat(color) { return this.keep(new THREE.MeshBasicMaterial({ color })); }
   outline(path, width, height, material) {
     const svg = new SVGLoader().parse(`<svg xmlns="http://www.w3.org/2000/svg"><path d="${path}"/></svg>`);
-    const shapes = svg.paths.flatMap(p => SVGLoader.createShapes(p));
+    const shapes = svg.paths.flatMap(p => p.toShapes());
     const geometry = new THREE.ExtrudeGeometry(shapes, { depth: 3, bevelEnabled: true, bevelSize: .3, bevelThickness: .3, bevelSegments: 2, curveSegments: 16 });
     geometry.rotateX(Math.PI); geometry.computeBoundingBox();
     const size = geometry.boundingBox.getSize(new THREE.Vector3());
@@ -448,13 +456,18 @@ export default class SignatureSequence {
     this.paint(0);
   }
 
-  play(delay = 1.10) {
+  play(delay = 1.10, { full = true } = {}) {
     const timeline = gsap.timeline({
-      delay,
-      onComplete: () => { this.owner.entrance = null; this.paint(2.9); this.owner.render(); this.owner.onRest?.(); },
+      delay: full ? delay : Math.min(delay, .35),
+      onComplete: () => { this.owner.entrance = null; this.paint(2.9); this.owner.render(); this.owner.rest(); },
     });
     // Keep the choreography intact, but give the material studies room to read.
-    for (const [time, duration] of SEQUENCE_BEATS) {
+    for (const [time, duration] of full ? SEQUENCE_BEATS : SHORT_BEATS) {
+      if (duration === null) {
+        timeline.call(() => { this.paint(time); this.owner.render(); });
+        timeline.set(this.clock, { time });
+        continue;
+      }
       timeline.to(this.clock, { time, duration, ease: 'none', onUpdate: () => {
         this.paint(this.clock.time); this.owner.render();
       } });
@@ -469,7 +482,7 @@ export default class SignatureSequence {
     this.layers.forEach(layer => { layer.visible = true; layer.children.forEach(obj => { obj.visible = false; }); });
     bodies.forEach(body => { body.visible = true; });
     letters.forEach((letter, i) => { letter.position.set(restX[i], restY[i], 0); letter.rotation.set(0, this.owner.restTurn, 0); });
-    dot.visible = true; dot.position.set(0, 0, 0);
+    dot.visible = false; dot.position.set(0, 0, 0);
     this.sBase.uniforms.uOpacity.value = 1;
     this.sBase.uniforms.uReveal.value = 1;
 
@@ -486,7 +499,7 @@ export default class SignatureSequence {
     bodies[2].visible = !braces;
     bodies[3].visible = !code && !paragraph;
     bodies[4].visible = !terminal && !flag;
-    dot.visible = !terminal && !flag && (t < .20 || t >= 1.86);
+    // The rope owns the dot's emergence, after this letter sequence finishes.
     this.slash.visible = slash; this.firstAWriting.visible = firstAWriting;
     this.braces.visible = braces; this.aWire.visible = aWire;
     this.code.visible = code; this.paragraph.visible = paragraph;
@@ -571,14 +584,6 @@ export default class SignatureSequence {
       pos.needsUpdate = true;
       this.flag.geometry.computeBoundingBox();
       this.flag.geometry.computeBoundingSphere();
-    }
-    if (t >= 1.83 && t < 2.8) {
-      const up = THREE.MathUtils.clamp((t - 1.86) / .38, 0, 1);
-      const fall = THREE.MathUtils.clamp((t - 2.24) / .42, 0, 1);
-      dot.position.y = t < 2.24
-        ? mix(this.owner.dotContact, 14.7, 1 - (1 - up) ** 3)
-        : mix(14.7, 0, fall * fall);
-      if (t >= 2.66) dot.position.y = Math.sin((t - 2.66) / .14 * Math.PI) * .9;
     }
     this.layout(t, collapse);
   }

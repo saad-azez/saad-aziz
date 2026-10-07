@@ -85,7 +85,9 @@ html.is-loading {
   text-underline-offset: .22em;
 }
 
-html { scroll-behavior: smooth; scroll-padding-top: 32px; }
+html { scroll-padding-top: 32px; }
+/* No browser scrollbar: the rope becomes the page's scrollbar (webgl/stage/RopeScrollbar). */
+html { scrollbar-width: none; }
+html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; height: 0; }
 ::selection { background: var(--accent); color: var(--ground); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

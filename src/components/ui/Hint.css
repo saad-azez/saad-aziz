@@ -1,0 +1,50 @@
+/**
+ * Hint — a chip: the gesture in a disc of the accent, ringed by a pulse, and
+ * what it asks for beside it in small capitals. Springs in (a little past its
+ * size, and back) when data-on is true; out when not.
+ */
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 5px 14px 5px 5px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ground-raise) 82%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: var(--ink-2);
+  white-space: nowrap;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  transition: opacity .35s ease, transform .7s cubic-bezier(.34, 1.56, .64, 1), filter .35s ease;
+}
+.hint[data-on="false"] { opacity: 0; transform: translateY(8px) scale(.85); filter: blur(4px); transition-duration: .25s; }
+.hint__icon {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--ground);
+}
+/* A ring going out from the disc, now and then, to catch the eye without nagging it. */
+.hint__icon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  animation: hint-pulse 2.8s ease-out infinite;
+}
+@keyframes hint-pulse { 0% { transform: scale(1); opacity: .7; } 45%, 100% { transform: scale(1.7); opacity: 0; } }
+.hint__label { font-size: var(--step-mono); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hint, .hint__icon::after { transition-duration: .01s; animation: none; }
+}

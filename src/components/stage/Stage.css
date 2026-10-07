@@ -1,0 +1,36 @@
+/**
+ * Stage — the fixed canvas the coin and the rope scrollbar are drawn on.
+ *
+ * WEBFLOW HANDOFF
+ * Div Block (a canvas embed) · Position: Fixed · inset 0 · z-index 25, over the
+ * rails (20) and the lamp (21): the dot rests on the rail's edge, so it has to
+ * be drawn over it. Pointer events off: the page underneath stays clickable.
+ */
+.stage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 25;
+  display: block;
+  width: 100%;
+  /* The full screen height, not the window's: on a phone it never changes as the address bar comes and goes, so
+     the drawing is never stretched mid-scroll (lib/viewport). */
+  height: 100vh;
+  pointer-events: none;
+}
+
+/* The rope scrollbar's hit area: a strip down the right edge, over the rope.
+   It takes the pointer only once the rope hangs there. */
+.rope-scrollbar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 0;
+  z-index: 26;
+  width: 26px;
+  pointer-events: none;
+  touch-action: none;
+}
+.rope-scrollbar.is-active { pointer-events: auto; cursor: grab; }
+.rope-scrollbar.is-dragging { cursor: grabbing; }
+

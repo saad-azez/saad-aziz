@@ -1,4 +1,4 @@
-import { reducedMotion } from '../brand/motion.js';
+import { scrollToY, scrollToElement } from './smoothScroll.js';
 
 /**
  * In-page links.
@@ -24,14 +24,13 @@ const PAGE = import.meta.env.BASE_URL || '/';
 
 /** Scroll to a place on the page. Returns false when there is nothing there. */
 export function goToSection(id) {
-  const behavior = reducedMotion ? 'auto' : 'smooth';
   if (id === 'top') {
-    window.scrollTo({ top: 0, behavior });
+    scrollToY(0);
     return true;
   }
   const target = document.getElementById(id);
   if (!target) return false;
-  target.scrollIntoView({ behavior, block: 'start' });
+  scrollToElement(target);
   return true;
 }
 

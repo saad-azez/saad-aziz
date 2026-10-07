@@ -1,0 +1,61 @@
+/**
+ * SiteHeader — the mark, the clock and the call to action, fixed over every
+ * chapter. The row itself keeps the hero's own classes (.hero__top,
+ * .hero__mark, .hero__meta, .hero__nav: Hero.css, SketchClock.css), so it is
+ * exactly the header it was; this file only fixes it to the screen, gives it a
+ * ground over the page's own flow, and names the chapter beside the mark.
+ *
+ * WEBFLOW HANDOFF
+ * Div Block · Position: Fixed · top 0, left 0, right 0 · z-index 22 (over the
+ * rails and the lamp, under the stage's canvas, so the coin passes over it).
+ */
+
+.site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 22;
+  /* The hero frame's own top padding, so the row sits where it always sat. */
+  padding: clamp(24px, 4vh, 48px) var(--frame-inset) 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.site-header--visible { visibility: visible; }
+.site-header .hero__top { pointer-events: auto; }
+
+/* Over the page's own flow (not a pinned screen), a ground to be read on, fading out below the rule. */
+.site-header::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 -28px;
+  background: linear-gradient(to bottom, var(--ground) 0, var(--ground) calc(100% - 28px), color-mix(in srgb, var(--ground) 0%, transparent));
+  opacity: 0;
+  transition: opacity .45s ease;
+  pointer-events: none;
+}
+.site-header[data-solid="true"]::before { opacity: 1; }
+
+/* The mark, and the chapter beside it. */
+.site-header__start { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.site-header__chapter { position: relative; display: grid; margin: 0; color: var(--ink); font-size: 13px; font-weight: 500; letter-spacing: .04em; white-space: nowrap; }
+.site-header__chapter > span {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .35s ease, transform .6s cubic-bezier(.12, 0, .05, 1);
+}
+.site-header__chapter > span[data-active="true"] { opacity: 1; transform: none; transition-delay: .1s; }
+.site-header__index { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* The hero keeps the header's room in its own layout, empty. */
+.hero__top--spacer { height: 74px; padding: 0; }
+
+@media (max-width: 700px) {
+  .hero__top--spacer { height: 60px; }
+  /* No room beside the mark on a phone: the clock has the middle. */
+  .site-header__chapter { display: none; }
+}

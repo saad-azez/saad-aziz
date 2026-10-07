@@ -80,5 +80,9 @@
 .rail--left .rail__scale { right: 0; }
 .rail--right .rail__scale { left: 0; }
 
-/* No breakpoint: `--rail` is a fluid clamp, so the margin narrows to a hairline
-   on a phone and opens to its full width on a desktop on its own. */
+/* `--rail` is a fluid clamp, so the margin narrows on a small screen and opens to
+   its full width on a desktop on its own. On a phone (tokens.css) there are no
+   rails at all: the width goes to the work. */
+@media (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
+  .rail { display: none; }
+}

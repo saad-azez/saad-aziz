@@ -1,0 +1,26 @@
+/* The gestures (Gesture.jsx): each a short loop of the movement it asks for. */
+.gesture { display: block; width: 100%; height: 100%; overflow: visible; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.gesture__tip { fill: currentColor; stroke: none; }
+
+.gesture--drag .gesture__tip { animation: gesture-slide 1.6s cubic-bezier(.45, 0, .2, 1) infinite; }
+.gesture--drag .gesture__chevron { animation: gesture-nudge 1.6s ease-in-out infinite; }
+.gesture--drag .gesture__chevron--end { animation-delay: -.8s; }
+@keyframes gesture-slide { 0%, 100% { transform: translateX(-4.5px); } 50% { transform: translateX(4.5px); } }
+@keyframes gesture-nudge { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
+.gesture--tap .gesture__tip { transform-origin: 12px 12px; animation: gesture-press 1.5s ease-in-out infinite; }
+.gesture--tap .gesture__ring { transform-origin: 12px 12px; animation: gesture-ring 1.5s ease-out infinite; }
+@keyframes gesture-press { 0%, 100% { transform: scale(1); } 20% { transform: scale(.72); } 40% { transform: scale(1); } }
+@keyframes gesture-ring { 0%, 18% { transform: scale(.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: scale(1.15); opacity: 0; } }
+
+.gesture--look .gesture__lens { animation: gesture-drift 2.4s ease-in-out infinite; }
+.gesture--look .gesture__glint { animation: gesture-nudge 2.4s ease-in-out infinite; }
+@keyframes gesture-drift { 0%, 100% { transform: translate(-1.5px, .5px); } 50% { transform: translate(1.5px, -1px); } }
+
+.gesture--grab .gesture__tip { animation: gesture-lift 1.6s cubic-bezier(.45, 0, .2, 1) infinite; }
+.gesture--grab .gesture__arrow { animation: gesture-nudge 1.6s ease-in-out infinite; }
+@keyframes gesture-lift { 0%, 100% { transform: translateY(1.5px); } 50% { transform: translateY(-2.5px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .gesture * { animation: none !important; }
+}

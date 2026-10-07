@@ -1,0 +1,22 @@
+/* The card that opens where the reader clicked Saad's email on the book. */
+.email-card {
+  position: fixed;
+  z-index: 1000;
+  box-sizing: border-box;
+  padding: 18px 20px 20px;
+  background: var(--ground-raise);
+  border: 1px solid var(--rule);
+  border-radius: 18px;
+  box-shadow: 0 18px 50px -18px rgba(37, 32, 42, .35), 0 2px 8px rgba(37, 32, 42, .08);
+  animation: email-card-in .28s cubic-bezier(.2, .8, .2, 1);
+}
+.email-card__label { margin: 0 0 4px; color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+.email-card__address { margin: 0 0 16px; color: var(--ink); font: 400 21px/1.2 var(--font-editorial); overflow-wrap: anywhere; }
+.email-card__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.email-card__actions > * { flex: 1 1 auto; justify-content: center; }
+.email-card .ring-btn { --ring-size: 40px; font-size: 14px; }
+.email-card .ring-btn--pill { padding: 0 1.2em; }
+.email-card__web { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); animation: email-card-in .28s cubic-bezier(.2, .8, .2, 1); }
+.email-card__hint { margin: 0 0 10px; color: var(--ink-2); font-size: 13px; line-height: 1.4; }
+@keyframes email-card-in { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .email-card { animation: none; } }

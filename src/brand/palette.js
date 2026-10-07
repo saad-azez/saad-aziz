@@ -12,6 +12,8 @@ export { onSchemeChange } from './scheme.js';
 
 const ROLES = {
   ground: '--ground',
+  groundRaise: '--ground-raise',
+  rule: '--rule',
   groundGlow: '--ground-glow',
   groundEdge: '--ground-edge',
   ink: '--ink',
@@ -32,7 +34,6 @@ export function brandPalette() {
 
   return Object.fromEntries(Object.entries(ROLES).map(([role, token]) => {
     const value = styles.getPropertyValue(token).trim();
-    if (!value) console.warn(`[brand] ${token} is not declared in tokens.css`);
     return [role, value || MISSING];
   }));
 }

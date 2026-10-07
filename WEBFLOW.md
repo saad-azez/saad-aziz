@@ -452,6 +452,44 @@ bundle does this and needs only the class names above to be present.
 
 ---
 
+## The letter (the contact's Webflow form)
+
+The contact's letter is sent straight into the project's **Forms** tab (and
+Webflow's notification email) by a native Form Block on the page. The letter
+fills it in and submits it (`src/lib/webflowForm.js`); Webflow's own script does
+the sending. Webflow only takes submissions for a form it has itself, on a
+published Webflow page, so this block has to exist in the Designer:
+
+1. On the page, add a **Form Block** anywhere (the end of the contact section is
+   fine). Select the form element inside it and set its **Form Name** to
+   `Letter` exactly (the code finds it by that name).
+2. Give it five fields, each with its **Name** set exactly as below (the names
+   are the columns in the Forms tab; `CONTACT.fields` in `src/content/site.js`):
+
+   | Field Name | Type | What arrives |
+   |---|---|---|
+   | `Name` | Text Field | their name |
+   | `Email` | Email | where to write back |
+   | `Project` | Text Field | e.g. "3D website, Webflow" |
+   | `Budget` | Text Field | e.g. "$5,000" |
+   | `Message` | Text Area | their idea |
+
+   Leave **Required** off on all of them: the letter checks them itself.
+3. Hide the whole Form Block: give the block (`.w-form`) a class, say
+   `letter-post`, set to **Display: None**. It still sends; it is just never seen.
+4. Leave its success and error messages as they are (they stay hidden too): the
+   letter watches them to know whether the send went through.
+5. In **Site settings → Forms**, set where the notification emails go
+   (saad.azieiz@gmail.com), and keep reCAPTCHA **off** for this form (the letter
+   cannot answer a captcha it never shows).
+6. Publish, then send yourself a letter from the live site and check it arrives
+   in the Forms tab.
+
+If the block is missing on the live page, the letter says it did not go and
+offers itself as an email instead, written out in full. In development (Vite)
+there is no Webflow, so it pretends to send after a moment and logs the fields
+to the console.
+
 ## Adding a component
 
 1. `src/components/<name>/<Name>.jsx`

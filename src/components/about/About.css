@@ -1,0 +1,516 @@
+/**
+ * About — the other side of the coin.
+ *
+ * One pinned screen with three layers on it, which the scroll takes the reader
+ * through (aboutTransition, told by the stage as --about-* and data-stop,
+ * data-step): the card (the coin turned over to the portrait under the title),
+ * the line (a tower with a road wound up it, the coin climbing it) and the
+ * bench (the process, the coin made again by each step). The coin itself is
+ * drawn by the stage, over the empty spots (.about__spot) it is measured from.
+ * Then, in the page's own flow, .about-more.
+ *
+ * WEBFLOW HANDOFF
+ * `.about` is a tall section; `.about__pin` inside it is Position: Sticky,
+ * top 0, height 100vh, overflow hidden, as the journey's is. The layers are
+ * Position: Absolute inside it. The reveal variables need an embed (see
+ * WEBFLOW.md, the journey's).
+ */
+
+.about {
+  --about-enter: 0;
+  --about-title: 0;
+  --about-lede: 0;
+  --about-card: 1;
+  --about-line: 0;
+  --about-bench: 0;
+  /* The house ease (brand/motion sunOut), for what changes by itself rather than with the scroll. */
+  --arrive: cubic-bezier(.12, 0, .05, 1);
+  /* The foot of the site's header, fixed over this screen (components/header): where the layers start. */
+  --head: calc(clamp(24px, 4vh, 48px) + 74px);
+  position: relative;
+  z-index: 1;
+}
+
+.about__pin {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+  /* The same lit wall as the work's window (Journey.css): the same room, the next part of it. */
+  background:
+    linear-gradient(to bottom, transparent 72%, var(--ground)),
+    radial-gradient(circle at 50% 48%, transparent 45svh,
+      color-mix(in srgb-linear, var(--ground-edge) 30%, transparent) 80svh,
+      color-mix(in srgb-linear, var(--ground-edge) 60%, transparent) 115svh),
+    radial-gradient(circle at 50% 48%,
+      color-mix(in srgb-linear, var(--ground-glow) 70%, var(--ground)) 0,
+      color-mix(in srgb-linear, var(--ground-glow) 48%, var(--ground)) 50svh,
+      color-mix(in srgb-linear, var(--ground-glow) 25%, var(--ground)) 80svh,
+      var(--ground) 120svh);
+  background-color: var(--ground);
+}
+
+/* The three layers: each over the whole screen under the head, there only while it shows at all (data-card,
+   data-line, data-bench), and taking the pointer only while it is the one on show (data-layer). */
+.about__layer {
+  position: absolute;
+  top: var(--head);
+  left: var(--frame-inset);
+  right: var(--frame-inset);
+  bottom: 0;
+  pointer-events: none;
+}
+.about[data-card="off"] .about__card,
+.about[data-line="off"] .about__line,
+.about[data-bench="off"] .about__bench { visibility: hidden; }
+.about[data-layer="card"] [data-layer-name="card"],
+.about[data-layer="line"] [data-layer-name="line"],
+.about[data-layer="bench"] [data-layer-name="bench"] { pointer-events: auto; }
+
+/* Words that rise one after another with their line's reveal (--reveal), as the work's do. */
+.about__words .w { display: inline-block; white-space: pre; --t: clamp(0, calc(var(--reveal, 1) * 2.4 - var(--i) * .1), 1);
+  opacity: var(--t); transform: translateY(calc((1 - var(--t)) * .5em)) rotate(calc((1 - var(--t)) * 3deg)); filter: blur(calc((1 - var(--t)) * 6px)); }
+
+/* ----- the card ---------------------------------------------------------- */
+
+.about__card {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  justify-items: center;
+  text-align: center;
+  padding: clamp(18px, 4vh, 48px) 0 clamp(24px, 5vh, 56px);
+  opacity: var(--about-card);
+  transform: translateY(calc((1 - var(--about-card)) * -48px));
+}
+.about__eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-size: var(--step-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  opacity: var(--about-title);
+}
+.about__title {
+  --reveal: var(--about-title);
+  margin: .18em 0 0;
+  color: var(--ink);
+  font: 400 clamp(44px, 6.6vw, 124px)/1 var(--font-editorial);
+  letter-spacing: -.03em;
+}
+.about__title em { font-style: normal; color: var(--accent); }
+.about__coin { position: relative; align-self: center; }
+.about__spot { display: block; aspect-ratio: 1; }
+/* The coin on the card is the reader's: dragged across or tapped, it turns over (up and down is still the page's scroll on a phone). */
+.about__spot--card { width: min(31svh, 40vw, 340px); border-radius: 50%; cursor: grab; touch-action: pan-y; -webkit-tap-highlight-color: transparent; }
+.about__spot--card:active { cursor: grabbing; }
+/* What can be done with it: a chip off its shoulder (its foot is the ring's), once the turn to his face has been seen. */
+.about__hint { position: absolute; left: 96%; top: 12%; }
+
+/* The reviews that call him Saadi. On a wide screen the stage draws them, on curved panes of glass in a ring round
+   the coin (webgl/stage/ReviewRing), and this list is there for a screen reader; room is kept under the coin for the
+   ring's front. On a narrow screen they run as a ticker over it (below). */
+.about__coin { margin-bottom: clamp(64px, 11svh, 116px); }
+.about__said { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%);
+  white-space: nowrap; list-style: none;
+  --glass-top: rgba(255, 255, 255, .94); --glass-foot: rgba(255, 255, 255, .58); --glass-edge: rgba(255, 255, 255, .95);
+  --glass-shade: rgba(52, 30, 42, .2); }
+:root[data-scheme="night"] .about__said { --glass-top: rgba(255, 255, 255, .13); --glass-foot: rgba(255, 255, 255, .04);
+  --glass-edge: rgba(255, 255, 255, .16); --glass-shade: rgba(0, 0, 0, .45); }
+.about__saying {
+  --circle: clamp(0, calc(var(--about-lede) * 3.4 - var(--i) * .38 - .55), 1);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--glass-edge);
+  border-radius: 14px;
+  background: linear-gradient(165deg, var(--glass-top), var(--glass-foot));
+  box-shadow: inset 0 1px 0 var(--glass-edge), 0 14px 30px -14px var(--glass-shade);
+  text-align: left;
+}
+.about__saying-chip, .about__saying-stars { display: none; }
+.about__saying q { color: var(--ink); font: 400 13px/1.3 var(--font-editorial); quotes: '“' '”'; }
+.about__by { color: var(--ink-3); font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+/* A short wide screen (a laptop's): the coin, the title and the panes a size down, and the ring's front given its room. */
+@media (max-height: 820px) and (min-width: 601px) and (min-aspect-ratio: 4/5) {
+  .about__title { font-size: min(6.6vw, 10svh); }
+  .about__spot--card { width: min(27svh, 40vw, 340px); }
+  .about__coin { margin-bottom: 12svh; }
+  .about__side { margin-top: 14px; }
+  .about__lede { margin-top: 8px; }
+}
+/* The name, circled. */
+.about__name { position: relative; background: none; color: var(--accent); }
+.about__name svg { position: absolute; inset: -5px -9px -4px; width: calc(100% + 18px); height: calc(100% + 9px); overflow: visible; fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round;
+  stroke-dasharray: 1; stroke-dashoffset: calc(1 - var(--circle)); }
+
+/* Which of his sides is up: the one on show, over the other. */
+.about__side { display: grid; justify-items: center; max-width: 48ch; margin-top: clamp(26px, 4svh, 40px); }
+.about__side-item {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  opacity: 0;
+  translate: 0 10px;
+  transition: opacity .35s ease, translate .6s cubic-bezier(.12, 0, .05, 1);
+}
+.about__side-item[data-active="true"] { opacity: 1; translate: 0 0; transition-delay: .12s; }
+.about__side-label { color: var(--accent); font-size: var(--step-label); font-weight: 600; letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.about__side-title { color: var(--ink); font: 400 clamp(20px, 1.8vw, 28px)/1.1 var(--font-editorial); }
+.about__side-text { color: var(--ink-2); font-size: 14px; line-height: 1.55; }
+.about__lede {
+  max-width: 62ch;
+  margin: clamp(10px, 2svh, 20px) 0 0;
+  color: var(--ink-2);
+  font-size: clamp(14px, 1.05vw, 17px);
+  line-height: 1.6;
+  opacity: var(--about-lede);
+  transform: translateY(calc((1 - var(--about-lede)) * 14px));
+}
+
+/* ----- the line: the tower ----------------------------------------------- */
+
+/* How far the words about a stop have come in (their title's words rising one after another, as the card's do). */
+@property --stop-reveal { syntax: '<number>'; inherits: true; initial-value: 0; }
+
+.about__line {
+  /* The tower's colours: the column, the road wound round it, and the shade on both. */
+  --tower: var(--accent);
+  --road: var(--ground-raise);
+  --tower-shade: var(--figure-shade);
+  opacity: clamp(0, calc(var(--about-line) * 1.6 - .3), 1);
+}
+:root[data-scheme="night"] .about__line {
+  --tower: color-mix(in srgb, var(--accent) 36%, var(--ground));
+  --road: var(--ink);
+}
+.about__line-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 24px;
+  padding-top: clamp(18px, 4vh, 48px);
+  transform: translateY(calc((1 - var(--about-line)) * 18px));
+}
+.about__line-title, .about__bench-title {
+  margin: 0;
+  color: var(--ink);
+  font: 400 clamp(26px, 2.5vw, 40px)/1.05 var(--font-editorial);
+  letter-spacing: -.02em;
+}
+.about__line-lede, .about__bench-lede { margin: 0; color: var(--ink-2); font-size: clamp(14px, 1.05vw, 16px); line-height: 1.6; }
+
+/* The tower's box, under the head to the foot of the screen (clear of a phone's address bar). The tower is measured
+   from it (components/about: tower.js towerLayout); the floor it stands on is its foot, and nothing shows below that
+   (so the tower can rise out of it, and sink back into it). */
+.about__climb {
+  position: absolute;
+  top: clamp(76px, 12svh, 120px);
+  left: 0;
+  right: 0;
+  bottom: calc(clamp(14px, 3svh, 36px) + (100vh - 100svh));
+  clip-path: polygon(-50% -100%, 150% -100%, 150% calc(100% + 40px), -50% calc(100% + 40px));
+}
+.about__tower {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  /* Up out of the floor as the card goes (it is up by the time the coin lands on it), and back down as it leaves. */
+  transform: translateY(calc(max(0, 1 - var(--about-line) * 1.2) * 75%));
+}
+.about__column { fill: var(--tower); }
+.about__column-top { fill: color-mix(in srgb, var(--tower) 72%, var(--road)); }
+.about__shade { stop-color: var(--tower-shade); }
+.about__sheen { stop-color: var(--figure-highlight); }
+.about__road { fill: var(--road); }
+.about__road-round { opacity: .4; }
+/* The wall cut into the column behind the road, and the shadow the road throws on the column under it. */
+.about__road-wall { fill: var(--tower-shade); opacity: .16; }
+.about__road-shadow { fill: var(--tower-shade); opacity: .3; }
+/* The way up: dotted ahead of the coin, drawn in solid behind it (components/about sets each stretch's offset). */
+.about__trail-ahead { fill: none; stroke: var(--tower); stroke-width: 1.2; stroke-dasharray: 1.5 5; stroke-linecap: round; opacity: .5; }
+.about__trail { fill: none; stroke: var(--tower); stroke-width: 2.2; stroke-dasharray: 1 1; stroke-dashoffset: 1; }
+/* Each stop: its mark on the road (filled in once passed, swelling while the coin is at it) and its year under it. */
+.about__mark circle {
+  fill: var(--road);
+  stroke: var(--tower);
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: fill .4s ease, scale .6s var(--arrive);
+}
+.about__mark[data-past="true"] circle { fill: var(--tower); }
+.about__mark[data-active="true"] circle { fill: var(--tower); scale: 1.35; }
+.about__mark text {
+  fill: var(--road);
+  font: 600 var(--step-mono)/1 var(--font-body);
+  letter-spacing: .14em;
+  text-anchor: middle;
+  opacity: .6;
+  transition: opacity .4s ease;
+}
+.about__mark[data-active="true"] text, .about__mark[data-past="true"] text { opacity: 1; }
+/* The summit's burst: its rays drawn out from the coin, one after another, once it is up there. */
+.about__burst path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset .3s ease;
+}
+.about__burst[data-active="true"] path { stroke-dashoffset: 0; transition: stroke-dashoffset .6s var(--arrive) calc(.35s + var(--k) * 40ms); }
+/* The leaders: across the column from the stop, then out to its words, drawn as the coin gets there. */
+.about__leader path { fill: none; stroke-width: 1; stroke-dasharray: 1 1; stroke-dashoffset: 1; transition: stroke-dashoffset .35s ease, opacity .5s ease; }
+.about__leader-on { stroke: var(--road); }
+.about__leader-off { stroke: var(--ink-3); }
+.about__leader[data-state="active"] path, .about__leader[data-state="past"] path { stroke-dashoffset: 0; }
+.about__leader[data-state="active"] .about__leader-on { transition: stroke-dashoffset .35s ease .1s; }
+.about__leader[data-state="active"] .about__leader-off { transition: stroke-dashoffset .7s var(--arrive) .4s; }
+.about__leader[data-state="past"] path { opacity: .45; }
+
+/* The words about each stop: beside the tower on its stop's side, level with it (components/about besideTower), coming
+   out from the column once the coin is there; those passed stay, quieter, their story folded away, so the way up reads
+   as a whole by the summit. */
+.about__stops { position: absolute; inset: 0; margin: 0; padding: 0; list-style: none; }
+.about__stop {
+  --reveal: var(--stop-reveal);
+  position: absolute;
+  top: var(--stop-top, 0);
+  width: var(--stop-width, 320px);
+  opacity: 0;
+  translate: var(--from, 0) 0;
+  transition: opacity .45s ease, translate .9s var(--arrive), --stop-reveal .5s ease;
+}
+.about__stop[data-side="left"] { right: var(--stop-right, auto); --from: 32px; text-align: right; }
+.about__stop[data-side="right"] { left: var(--stop-left, auto); --from: -32px; }
+.about__stop[data-state="active"] {
+  opacity: 1;
+  translate: 0 0;
+  --stop-reveal: 1;
+  transition: opacity .5s ease .45s, translate 1.1s var(--arrive) .45s, --stop-reveal 1.3s var(--arrive) .5s;
+}
+.about__stop[data-state="past"] { opacity: .5; translate: 0 0; --stop-reveal: 1; }
+.about__stop-no { display: flex; gap: 12px; align-items: baseline; margin: 0 0 6px; }
+.about__stop[data-side="left"] .about__stop-no { justify-content: flex-end; }
+/* The count, drawn rather than printed: outlined, as a drawing's figures are; in the accent while it is the one. */
+.about__stop-count {
+  color: transparent;
+  -webkit-text-stroke: 1.1px var(--ink);
+  font: 400 clamp(30px, 2.6vw, 44px)/.9 var(--font-editorial);
+  font-variant-numeric: lining-nums;
+  transition: -webkit-text-stroke-color .4s ease;
+}
+.about__stop[data-state="active"] .about__stop-count { -webkit-text-stroke-color: var(--accent); }
+.about__year { color: var(--ink-3); font-size: var(--step-mono); font-weight: 600; letter-spacing: .14em; font-variant-numeric: tabular-nums; text-transform: uppercase; }
+.about__span { color: var(--accent); }
+.about__where { margin: 0 0 6px; color: var(--ink); font: 400 clamp(21px, 1.75vw, 30px)/1.08 var(--font-editorial); letter-spacing: -.01em; }
+.about__role { margin: 0; color: var(--accent); font-size: var(--step-label); font-weight: 600; letter-spacing: var(--tracking-label); text-transform: uppercase; line-height: 1.5; }
+/* The story, unfolding while it is the stop on show. */
+.about__stop-more { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .6s var(--arrive), opacity .3s ease; }
+.about__stop[data-state="active"] .about__stop-more { grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows .8s var(--arrive) .7s, opacity .6s ease .8s; }
+.about__text { min-height: 0; overflow: hidden; margin: 0; padding-top: 0; transition: padding-top .6s var(--arrive); color: var(--ink-2); font-size: clamp(14px, 1vw, 16px); line-height: 1.55; }
+
+.about__stop[data-state="active"] .about__text { padding-top: 10px; transition-delay: .7s; }
+
+/* ----- the bench --------------------------------------------------------- */
+
+.about__bench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+  column-gap: clamp(28px, 5vw, 96px);
+  align-items: center;
+  padding-bottom: calc(clamp(18px, 3svh, 36px) + (100vh - 100svh));
+  opacity: var(--about-bench);
+}
+.about__desk { position: relative; display: grid; place-items: center; height: 100%; min-height: 0; }
+.about__spot--bench { width: min(46svh, 34vw, 420px); }
+/* The drawing's construction: its centre lines and its circle, its size dimensioned, while it is still a drawing. */
+.about__guides {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(min(46svh, 34vw, 420px) * 200 / 128);
+  translate: -50% -50%;
+  overflow: visible;
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: .5;
+  opacity: 0;
+  transition: opacity .6s ease;
+}
+.about[data-step="0"] .about__guides, .about[data-step="1"] .about__guides { opacity: calc(var(--about-bench) * .9); }
+.about__guide-circle { stroke-dasharray: .012 .01; }
+.about__guide-centre { stroke-dasharray: 9 3 2 3; }
+.about__guide-dim { stroke: var(--accent); }
+.about__guide-label { fill: var(--accent); stroke: none; font-family: var(--font-body); font-size: 6px; font-weight: 600; letter-spacing: .1em; text-anchor: middle; }
+.about__figure {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: clamp(8px, 4svh, 40px);
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--step-mono);
+  letter-spacing: .12em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.about__figure > span { position: absolute; left: 0; right: 0; opacity: 0; transition: opacity .4s ease; }
+.about__figure > span[data-active="true"] { opacity: 1; transition-delay: .2s; }
+
+.about__process { min-width: 0; transform: translateY(calc((1 - var(--about-bench)) * 22px)); }
+.about__bench-lede { margin-top: 10px; max-width: 40ch; }
+/* The steps, as a drawing's legend: all four named, the one on show underlined in the accent. */
+.about__steps-index {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: clamp(22px, 4svh, 40px) 0 clamp(20px, 3.5svh, 36px);
+  padding: 0;
+  border-top: 1px solid var(--rule);
+  list-style: none;
+}
+.about__steps-index li {
+  position: relative;
+  padding-top: 12px;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 500;
+  transition: color .4s ease;
+}
+.about__steps-index li span { display: block; margin-bottom: 4px; font-size: var(--step-mono); letter-spacing: .1em; font-variant-numeric: tabular-nums; }
+.about__steps-index li::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 12px;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .8s var(--arrive);
+}
+.about__steps-index li[data-done="true"] { color: var(--ink-2); }
+.about__steps-index li[data-active="true"] { color: var(--ink); }
+.about__steps-index li[data-active="true"]::before { transform: none; }
+.about__step-view { display: grid; }
+.about__step {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity .4s ease, transform .9s var(--arrive);
+}
+.about__step[data-active="true"] { opacity: 1; transform: none; transition-delay: .1s; }
+/* (Named in the legend above; said again for those who hear the page rather than see it.) */
+.about__step-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.about__step-text { margin: 0 0 clamp(18px, 3svh, 30px); color: var(--ink); font: 400 clamp(22px, 2.05vw, 34px)/1.22 var(--font-editorial); letter-spacing: -.01em; max-width: 24ch; }
+
+/* ----- narrow and upright screens ---------------------------------------- */
+
+@media (max-width: 600px), (max-aspect-ratio: 4/5) {
+  .about { --head: calc(clamp(24px, 4vh, 48px) + 60px); }
+  .about__title { font-size: clamp(36px, 10.5vw, 72px); }
+  .about__spot--card { width: min(28svh, 54vw); }
+  /* No room beside the coin: the note goes under it. */
+  .about__said { top: -54px; left: calc(50% - 50vw); display: flex; gap: 10px; width: max-content; height: auto; margin: 0; padding: 0 16px;
+    overflow: visible; clip-path: none;
+    animation: about-ticker 28s linear infinite alternate; }
+  .about__coin { margin-bottom: 0; }
+  .about__hint { left: 50%; top: calc(100% - 14px); translate: -50% 0; }
+  .about__saying { --t: clamp(0, calc(var(--about-lede) * 3.4 - var(--i) * .38), 1); padding: 7px 11px 6px; opacity: var(--t); }
+  .about__saying q { font-size: 13px; white-space: nowrap; }
+  @keyframes about-ticker { from { transform: translateX(0); } to { transform: translateX(calc(-100% + 100vw)); } }
+  .about__side { margin-top: 30px; }
+  .about__side-text { font-size: 13px; }
+  .about__lede { font-size: 13px; }
+  .about__lede { font-size: 14px; max-width: 34ch; }
+
+  /* No room either side of the tower: the words about the stop on show go under it, one stop at a time. */
+  .about__line { --under: calc(clamp(178px, 28svh, 240px) + (100vh - 100svh)); }
+  .about__line-head { flex-direction: column; gap: 6px; }
+  /* (The floor the tower rises out of is the foot of the screen, under the words.) */
+  .about__climb { top: clamp(66px, 10svh, 96px); bottom: var(--under);
+    clip-path: polygon(-50% -100%, 150% -100%, 150% calc(100% + var(--under)), -50% calc(100% + var(--under))); }
+  .about__stops { inset: calc(100% + 14px) 0 auto; height: calc(var(--under) - 30px); }
+  .about__stop, .about__stop[data-side] { top: 0; left: 0; right: 0; width: auto; text-align: left; --from: 0; translate: 0 14px; }
+  .about__stop[data-side="left"] .about__stop-no { justify-content: flex-start; }
+  .about__stop[data-state="past"] { opacity: 0; translate: 0 -10px; }
+  .about__stop[data-state="active"] { transition-delay: .2s; }
+  .about__stop-count { font-size: 30px; }
+  .about__where { font-size: 23px; }
+  .about__text { font-size: 14px; }
+
+  .about__bench { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, .8fr) auto; align-items: start; row-gap: 8px; }
+  .about__spot--bench { width: min(24svh, 48vw); }
+  .about__guides { width: calc(min(24svh, 48vw) * 200 / 128); }
+  .about__figure { display: none; }
+  .about__bench-title { font-size: 26px; }
+  .about__bench-lede { display: none; }
+  .about__steps-index { margin: 14px 0 16px; }
+  .about__steps-index li { font-size: 12px; }
+  .about__step-text { font-size: 20px; max-width: none; }
+}
+
+/* ----- after the pinned screen ------------------------------------------- */
+
+.about-more {
+  position: relative;
+  z-index: 1;
+  padding: clamp(72px, 14vh, 160px) var(--frame-inset) clamp(48px, 9vh, 112px);
+  background: var(--ground);
+}
+.about-more [data-in] { opacity: 0; transform: translateY(26px); transition: opacity .8s ease calc(var(--i, 0) * 90ms), transform 1.1s var(--arrive, cubic-bezier(.12, 0, .05, 1)) calc(var(--i, 0) * 90ms); }
+.about-more [data-in].is-in { opacity: 1; transform: none; }
+.about-more__numbers li { opacity: 0; transform: translateY(18px); transition: opacity .8s ease calc(var(--i) * 90ms), transform 1.1s cubic-bezier(.12, 0, .05, 1) calc(var(--i) * 90ms); }
+.about-more__numbers.is-in li { opacity: 1; transform: none; }
+
+/* The numbers, ruled off above and below, a hairline between each. */
+.about-more__numbers {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  border-block: 1px solid var(--rule);
+  list-style: none;
+}
+/* (The row itself stays; its numbers come in one after another.) */
+.about-more .about-more__numbers { opacity: 1; transform: none; }
+.about-more__numbers li { display: flex; flex-direction: column; gap: 10px; padding: clamp(22px, 4vh, 40px) clamp(12px, 1.6vw, 28px); }
+.about-more__numbers li + li { border-left: 1px solid var(--rule); }
+.about-more__value { color: var(--ink); font: 400 clamp(44px, 5.4vw, 96px)/.9 var(--font-editorial); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.about-more__label { color: var(--ink-2); font-size: 13px; line-height: 1.4; }
+
+.about-more__title { margin: 0 0 clamp(24px, 4vh, 44px); color: var(--ink); font: 400 clamp(32px, 3.4vw, 56px)/1.05 var(--font-editorial); letter-spacing: -.02em; }
+
+.about-more__bench { margin-top: clamp(80px, 14vh, 160px); }
+.about-more__items { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: clamp(16px, 2vw, 32px); margin: 0; padding: 0; list-style: none; }
+.about-more__items li { padding-top: 18px; border-top: 1px solid var(--rule); }
+.about-more__no { color: var(--accent); font-size: var(--step-mono); letter-spacing: .1em; font-variant-numeric: tabular-nums; }
+.about-more__items h4 { margin: 10px 0 8px; color: var(--ink); font: 400 clamp(19px, 1.45vw, 24px)/1.15 var(--font-editorial); }
+.about-more__items p { margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.6; }
+
+
+@media (max-width: 900px) {
+  .about-more__numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .about-more__numbers li + li { border-left: 0; }
+  .about-more__numbers li:nth-child(even) { border-left: 1px solid var(--rule); }
+  .about-more__numbers li:nth-child(n + 3) { border-top: 1px solid var(--rule); }
+  .about-more__numbers li:last-child { grid-column: 1 / -1; border-left: 0; }
+  .about-more__items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .about-more__items { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .about__words .w { filter: none; }
+  .about__stop, .about__stop *, .about__tower * { transition-duration: .01s !important; transition-delay: 0s !important; }
+  .about-more [data-in], .about-more__numbers li { transition-duration: .01s; transform: none; }
+}

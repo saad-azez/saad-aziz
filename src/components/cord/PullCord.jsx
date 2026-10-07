@@ -84,6 +84,8 @@ const LEN_DRAG = 5.5;
    side and the edge of the screen on the other; the lamp is sized to what is
    left and centred in it, so it can never meet the rail. */
 const CLEARANCE = 3;
+/** With no rails (a phone), how wide the lamp's strip at the screen's right edge is (px): inside the gutter, clear of the header. */
+const BARE_STRIP = 16;
 
 /* --- the light -----------------------------------------------------------------
    A soft pool falling from the bulb, in the lamp's own units: its middle and its
@@ -141,12 +143,15 @@ export default function PullCord({ visible }) {
     const root = rootRef.current;
     if (!root) return;
     const box = root.getBoundingClientRect();
-    const rail = document.querySelector('.rail--right');
+    const found = document.querySelector('.rail--right');
+    // On a phone there are no rails (Rails.css): the lamp hangs in a strip of its own at the screen's edge, with no
+    // graduations to keep clear of or to light.
+    const rail = found && found.getBoundingClientRect().width > 0 ? found : null;
     const scale = rail?.querySelector('.rail__scale');
     const railBox = rail?.getBoundingClientRect();
-    const width = railBox ? railBox.width : 44;
+    const width = railBox ? railBox.width : BARE_STRIP;
     const left = railBox ? railBox.left - box.left : box.width - width;
-    const room = Math.max(0, width - TICK_LEN - CLEARANCE * 2);
+    const room = Math.max(0, width - (rail ? TICK_LEN : 0) - CLEARANCE * 2);
     const fit = clamp(room / (RIM_HALF * 2), 0.3, 1.15);
     const scaleBox = scale?.getBoundingClientRect();
 
@@ -158,7 +163,7 @@ export default function PullCord({ visible }) {
     }
 
     geom.current = {
-      x: left + TICK_LEN + CLEARANCE + room / 2,
+      x: left + (rail ? TICK_LEN : 0) + CLEARANCE + room / 2,
       rest: parseFloat(getComputedStyle(root).getPropertyValue('--cord-length')) || 120,
       scale: fit,
       ticks: scale ? Array.from(scale.querySelectorAll('.rail__tick')).map(el => ({ el, y: Number(el.dataset.y) })) : [],

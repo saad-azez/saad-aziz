@@ -1,0 +1,4 @@
+/*
+  X-Robots-Tag: noindex, nofollow
+  Content-Security-Policy: frame-ancestors 'self' http://localhost:5173 http://localhost:4173
+  Referrer-Policy: strict-origin-when-cross-origin

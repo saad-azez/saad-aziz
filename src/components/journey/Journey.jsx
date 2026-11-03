@@ -32,23 +32,41 @@ export default function Journey({ reveal, animateText, onReady }) {
     const header = root.querySelector('.hero__top');
     // Everything of the hero but its header, which stays on top for the work too.
     const heroBody = [...heroNode.querySelectorAll('.hero__frame > :not(.hero__top)')];
-    const onTransition = ({ work, title, names, details, intro = 0, leave = 0, lens = 0, lensX = 0, lensY = 0, lensR = 0 }) => {
-      for (const [key, value] of Object.entries({ work, title, names, details, intro, leave })) {
-        root.style.setProperty(`--${key}-reveal`, value.toFixed(5));
+    // The scroll writes these every frame, and a write to an inherited custom property restyles everything under its
+    // element (the whole work, for the reveals). So the window is set straight on its elements, and each value goes
+    // only when it changes: the reveals as custom properties the work's CSS reads, the window and its rim as styles.
+    const workNode = root.querySelector('.work'), rimNode = root.querySelector('.journey__lens');
+    const written = new WeakMap();
+    const setStyles = (node, styles) => {
+      const seen = written.get(node) ?? {};
+      written.set(node, seen);
+      for (const [name, value] of Object.entries(styles)) {
+        if (seen[name] === value) continue;
+        seen[name] = value;
+        if (name.startsWith('--')) node.style.setProperty(name, value); else node.style[name] = value;
       }
+    };
+    const setInert = (node, inert) => { if (node.inert !== inert) node.inert = inert; };
+    const onTransition = ({ work, title, names, details, intro = 0, leave = 0, lens = 0, lensX = 0, lensY = 0, lensR = 0 }) => {
+      setStyles(workNode, {
+        '--work-reveal': work.toFixed(5), '--title-reveal': title.toFixed(5), '--names-reveal': names.toFixed(5),
+        '--details-reveal': details.toFixed(5), '--intro-reveal': intro.toFixed(5), '--leave-reveal': leave.toFixed(5),
+        // The window the coin opens (the work is clipped to it), and its hairline, gone as it fills the screen.
+        clipPath: `circle(${lensR.toFixed(1)}px at ${lensX.toFixed(1)}px ${lensY.toFixed(1)}px)`,
+      });
+      setStyles(rimNode, {
+        width: `${(lensR * 2).toFixed(1)}px`, height: `${(lensR * 2).toFixed(1)}px`,
+        transform: `translate(${(lensX - lensR).toFixed(1)}px, ${(lensY - lensR).toFixed(1)}px)`,
+        opacity: (Math.min(1, lens * 12) * (1 - Math.max(0, (lens - .7) / .3))).toFixed(3),
+      });
       // The lines about the shut book, taken away outright once they have moved out (or before they come in), so
       // nothing of them lingers, blurred, over the open book on any browser (Work.css .work__intro).
       const introOn = intro > .001 && leave < .999;
       if (root.dataset.intro !== String(introOn)) root.dataset.intro = introOn;
-      // The window the coin opens: where it is, how big, and its hairline (gone as it fills the screen).
-      root.style.setProperty('--lens-x', `${lensX.toFixed(1)}px`);
-      root.style.setProperty('--lens-y', `${lensY.toFixed(1)}px`);
-      root.style.setProperty('--lens-r', `${lensR.toFixed(1)}px`);
-      root.style.setProperty('--lens-line', (Math.min(1, lens * 12) * (1 - Math.max(0, (lens - .7) / .3))).toFixed(3));
-      heroBody.forEach(node => { node.inert = lens >= .999; });
+      heroBody.forEach(node => setInert(node, lens >= .999));
       // The book can be taken in the hand as soon as the work is in view; the copy, once it is there.
-      root.querySelector('.work').inert = lens < .999;
-      root.querySelectorAll('.work__copy, .work__lead').forEach(node => { node.inert = details < .5; });
+      setInert(workNode, lens < .999);
+      root.querySelectorAll('.work__copy, .work__lead').forEach(node => setInert(node, details < .5));
     };
     // The shut book as the stage stands it (px, on the pinned screen): its size, and the top of the room it is
     // centred in, for the lines about it to be set round it (Work.css .work__intro).

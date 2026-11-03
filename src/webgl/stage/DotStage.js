@@ -6,10 +6,16 @@ import { brandPalette, onSchemeChange } from '../../brand/palette.js';
 import { reducedMotion } from '../../brand/motion.js';
 import RopeScrollbar from './RopeScrollbar.js';
 import ReviewRing from './ReviewRing.js';
-import { coinTransition, splitAt, ROW, FLIGHT } from './coinTransition.js';
-import { aboutTransition, aboutFaces, SKETCH } from './aboutTransition.js';
-import { towerAt, TOWER } from './tower.js';
-import { markCanvas, isDark, hasMark, COIN_SKILLS, MONOGRAM, PORTRAIT, MESH, ASCII, portraitField, portraitPhoto, asciiAtlas } from '../coinMarks.js';
+import { Band } from './Band.js';
+import { Puzzle } from './PuzzleBoard.js';
+import { processTransition, wordTurn } from './processTransition.js';
+import { coinWords, loadWordsFace, MINE, YOURS } from './coinWords.js';
+import { moreTransition, MORE } from './moreTransition.js';
+import { coinTransition, splitAt, ROW, FLIGHT, CENTRE, STICK } from './coinTransition.js';
+import { aboutTransition, aboutFaces, LINE, ABOUT_SCROLL, WHEEL } from './aboutTransition.js';
+import { markCanvas, morphField, MORPH, isDark, hasMark, COIN_SKILLS, MONOGRAM, PORTRAIT, MESH, ASCII, portraitPhoto, asciiAtlas } from '../coinMarks.js';
+import { COIN_LOG, coinLog } from '../coinLog.js';
+import { startTour, stepTour, endTour, tourShown, tourFooting, stationAt, HIGH_TIME, TOSS } from './ropeTour.js';
 import Book, { itemAt, ringSize, VIEW, PAGE_ASPECT, BOOK as MAKE } from './Book.js';
 import { coverColours, COVER_STICKER } from './bookCovers.js';
 import { makeJournalCovers, LINKS } from './journal/coverArt.js';
@@ -83,7 +89,7 @@ export const SCROLL = {
   FOLD: 0,
 };
 
-const FOV = 30;
+export const FOV = 30;
 /**
  * Half-turns the coin makes on the i as the window opens: the hero's next
  * skill passes, and it lands on the first tool of the project on show.
@@ -166,71 +172,82 @@ const SHAKE = { tremble: 4, roll: .035, thump: 12, tip: .08, knock: 4, drop: 24,
 /**
  * The tightrope: the scroll rope comes into the project's copy as the book
  * opens (`from` on the way, over `span`; RopeScrollbar), tied between two
- * posts, and the coin, flicked off the cover, lands right on it and walks it:
- * standing over each of the project's tools' tags in turn (`hold` s), then
- * walking on to the next (`walk` s), turning over to that tool as it goes;
- * the tags hang evenly along it, `inset` of it clear of each post.
+ * posts, and the coin, flicked off the cover, lands right on it and is tossed
+ * along it, from one of the project's tools' tags to the next, turning up each
+ * tool as it lands (ropeTour.js has the tour).
  *
  * The rope sags `droop` px at its middle by itself, and `weight` px more
- * under the coin, to a point where it stands (ropeDissolve ROPE_SAG); landing
- * on it the coin comes down at `landing` px/s and the rope gives and bounces
- * back on its spring (`give`: rad/s, damping), and each step it takes on it
- * (`step` px/s) bounces it a little again. Its place along the rope follows
- * the walk on `follow`.
+ * under the coin, to a point where it stands (ropeDissolve ROPE_SAG).
  *
- * Balancing: how far it leans either way at most (rad), how fast it wobbles,
- * how far it edges back and forth (of its radius) to keep its balance, and
- * how far it leans into its walk (rad per px/s, and at most).
+ * Balancing: how far it leans the way it is going (rad), how far it sways
+ * standing, the knock a landing gives its lean (rad/s) and the lean's spring
+ * (rad/s, damping: it rocks as it lands, and catches itself).
  */
 const TIGHTROPE = {
-  from: 2.02, span: .26, hold: 1.6, walk: .95, inset: .08,
-  droop: 3, weight: 5, landing: 190, step: 55, give: [17, .16], follow: [11, .95],
-  lean: .08, wobble: 1.7, edge: .14, into: .0009, intoMost: .2,
+  from: 2.02, span: .26,
+  droop: 3, weight: 5,
+  lean: .14, sway: .045, kick: 1.3, balance: [9, .28],
 };
-/** The tag the coin is at on the `n`th step of its walk, of `count`: along the rope and back, 0 1 2 1 0 1 … */
-const pace = (n, count) => {
-  if (count < 2) return 0;
-  const p = mod(n, 2 * (count - 1));
-  return p < count ? p : 2 * (count - 1) - p;
-};
+/** A mark changed in view off the rope (another project come round while the coin is on its way to it) is printed on from the middle out, over this long (s). */
+const WIPE = { time: .55 };
 /** How far the copy rises as it comes in (px; Work.css .work__copy), for the rope to rise with it. */
 const COPY_RISE = 22;
 /** Half the rope's thickness on the screen (px; RopeScrollbar DIAMETER), for the coin to stand on top of it. */
 const ROPE_HALF = 2;
 const UPRIGHT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
 /**
- * The book turning on its own, like the reel but slower: it never stops, but
- * slows almost to a standstill on every page (`ease`: 0 turns steadily, 1
- * stops dead), `period` seconds a page. Past the covers (after the last page,
- * on round to the first) it does not slow, and takes `covers` periods for the
- * two places.
+ * The book turning on its own: it rests on a page until the coin has been
+ * along all of that project's tools (turnDue), then turns to the next over
+ * `turn` seconds, slow away and slow in. Past the covers (after the last page,
+ * on round to the first) the two places take `covers` of that. With no coin
+ * on the rope to wait for, it rests `dwell` seconds on each page.
  */
-const SPIN = { period: 3.4, ease: .82, covers: 1.5 };
+const SPIN = { turn: 2, covers: 1.5, dwell: 3.4 };
 const TAU = Math.PI * 2;
-/** The spin's easing over one step: slow at both ends, never quite still. */
-const spinEase = x => x - SPIN.ease * Math.sin(TAU * x) / TAU;
-const spinSpeed = x => 1 - SPIN.ease * Math.cos(TAU * x);
+/** The turn's easing over one step: from rest, to rest. */
+const spinEase = x => x - Math.sin(TAU * x) / TAU;
+const spinSpeed = x => 1 - Math.cos(TAU * x);
 const mod = (a, n) => ((a % n) + n) % n;
 /** The lamp under the pointer: how long it takes to open wider and brighten, and to settle back (s). */
 const LIT = { on: .7, off: .9 };
 /**
  * The coin in the about (aboutTransition has the choreography): how many
- * times it turns end over end falling into it out of the sky, how high it arcs
- * moving between places there (of the screen's height), how far it leans
+ * times it turns end over end falling into it out of the sky, how far it leans
  * toward the pointer at rest (rad), how far it sways there by itself (rad, and
  * how fast), and how much of the way in the rope takes to leave the copy for
  * the edge again, the scrollbar.
  */
-const ABOUT_COIN = { turns: 1, arc: .1, tilt: .26, sway: .07, swaySpeed: .9, rope: .35 };
+const ABOUT_COIN = { turns: 1, tilt: .26, sway: .07, swaySpeed: .9, rope: .35 };
+/**
+ * The reviews' ring round the coin on the card, going: it folds away, all of it, before the coin moves at all.
+ * Scrolling on, over the about's FOLD (aboutTransition: after the card's stretch, the coin held just as it is), the
+ * fold done `done` of the way through it so the coin is still a moment longer once the ring has gone; the coin
+ * jumping back to the rope, by the clock, in `shut` s (it is shut by the time the coin is off the ground). Coming,
+ * it opens at `open` /s, easing in.
+ */
+const RING_GO = { done: .85, shut: .2, open: 2.6 };
+/**
+ * The ring the coin becomes after the process (stepBand): how far it turns round its own axis with the scroll once it
+ * is formed (rad/px), and its outer radius at radius 1 (Band: so the ring is as big as its place).
+ */
+const BAND = { turn: .0016, outer: 1.04 };
+/** The ring at rest: how it is turned (rad, about y, then x, then z: its opening to the left, leaning right), and round its axis. */
+const BAND_POSE = { euler: [-.32, 1.18, -.5], spin: .4 };
+/** How finely the scroll draws a turn of what the coin says (coinSays). */
+const SAID_STEPS = 60;
 /** A narrow screen (as About.css has it): no ring of reviews round the coin there, they run as a ticker. */
 const narrowScreen = window.matchMedia("(max-width: 600px), (max-aspect-ratio: 4/5)");
 /**
- * The coin in the hand, on the card: how far it turns per px dragged, how fast
- * it may spin (rad/s), how quickly a spin dies away, below what speed it
- * settles, the spring that settles it onto a face (rad/s, damping), and the
- * flick a tap gives it (rad/s: about a half-turn, over to his other side).
+ * The coin in the hand, on the card. A drag turns it over once, to his other
+ * side, however hard it is flicked: how far it turns per px dragged, and at
+ * most (`most` half-turns, held); how far it must be turned (`flip`, rad), or
+ * how fast flicked (`flick`, rad/s), to go over rather than back; the most of
+ * a flick it keeps (`fastest`, rad/s) into the spring that settles it on the
+ * face (rad/s, damping); and the flick a tap gives it (rad/s). Left alone it
+ * turns over by itself, `every` seconds; `after` the reader has turned it,
+ * that long first.
  */
-const HAND = { perPx: .012, fastest: 26, friction: 1.6, settle: 3, spring: [9, .7], tap: 7.5 };
+const HAND = { perPx: .012, most: 1.12, flip: .3, flick: 2, fastest: 10, spring: [9, .7], tap: 7.5, every: 5, after: 9 };
 // (Lower on a phone: lib/device.)
 const DPR = pixelRatio;
 
@@ -250,52 +267,39 @@ void main() {
 
 /**
  * A coin face: the letters' material, with the tool's official mark printed on
- * it in its own colours. Or (uMode) Saad's face, drawn here every frame from
- * the portrait's light (uField: red, the light; green, the sitter):
+ * it in its own colours. Or (uMode) Saad himself, made every frame of his own
+ * photograph's colours (uPhoto: him, cut out of the wall behind him, coinMarks
+ * portraitPhoto), so either side is him exactly, seen at a glance:
  *
- *   1  the engineer: set in ASCII, a grid of uCells characters across, each
- *      the ramp's heavier the more ink that part of the face wants (on a light
- *      coin the dark of it, on a dark coin, uOnDark, the light), each a shade
- *      of ink as well as a weight, so the features carry;
- *   2  the artist: a low-poly mesh of the same face, facets of flat tone
- *      sampled at their middles, the wire of their edges over them, and the
- *      empty ground round him a faint grid, a modeller's viewport.
- *
- * Either way, where the pointer is (uPointer on the face, 0 → 1; uHover how
- * much it is there) a lens looks through the drawing at him: inside it, his
- * photograph (uPhoto), magnified; at its edge a fine ring, and a band of
- * characters churning, as if the code were decoding into the picture.
+ *   1  the engineer: set in code, a grid of uCells characters across, each
+ *      the colour of his photograph where it stands and the heavier the more
+ *      light there is (on a light coin, uOnDark 0, the more dark), over the
+ *      photograph itself, dimmed (lightened on a light coin), so from where
+ *      it is seen it is his picture, and close to, it is all characters;
+ *   2  the artist: a low-poly mesh of him, each facet flat, the colour of his
+ *      photograph at its middle, a touch lighter or darker than the next as a
+ *      modelled surface is, the wire of its edges faint over it.
  */
 const ASCII_RAMP = ASCII.ramp.length.toFixed(1), ASCII_ALL = (ASCII.ramp.length + ASCII.scramble.length).toFixed(1);
 const FACE_FRAGMENT = /* glsl */ `
 uniform vec3 uColor, uShade, uHighlight, uMark, uAsciiInk, uAsciiHot;
-uniform float uRoughness, uMarkOpacity, uMode, uOnDark, uCells, uHover, uTime, uNear;
-uniform vec2 uPointer;
-uniform sampler2D uMask, uField, uGlyphs, uPhoto;
+uniform float uRoughness, uMarkOpacity, uMode, uOnDark, uCells, uTime, uWipe, uMorph, uGlint;
+uniform sampler2D uMask, uMaskOld, uGlyphs, uPhoto, uMorphA, uMorphB;
 varying vec3 vView, vNormal;
 varying vec2 vUv;
 ${SURFACE_LIGHTING}
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-/** How much ink the face wants at \`uv\` (0 → 1), and whether it is the sitter there (not the wall). */
-vec2 ink(vec2 uv) {
-  vec2 field = texture2D(uField, uv).rg;
-  return vec2(mix(1.0 - field.r, field.r, uOnDark), field.g);
-}
-vec4 engineer(vec2 uv, float edge) {
+vec4 engineer(vec2 uv) {
   vec2 grid = uv * uCells, cell = floor(grid), local = fract(grid);
-  vec2 centre = (cell + .5) / uCells;
-  vec2 want = ink(centre);
-  float level = want.x * want.y;
-  float index = floor(clamp(level, 0.0, 1.0) * (${ASCII_RAMP} - 1.0) + .5);
-  // At the lens's edge the characters churn: another, random, for a moment, now and then.
-  if (want.y > .05 && hash(cell + floor(uTime * 15.0)) < edge * .9) {
-    index = ${ASCII_RAMP} + floor(hash(cell * 1.7 + floor(uTime * 21.0)) * (${ASCII_ALL} - ${ASCII_RAMP}));
-  }
+  // The character's colour: his, averaged over its cell; and its weight, by how light (or dark) that is.
+  vec4 tone = texture2D(uPhoto, (cell + .5) / uCells, 2.5);
+  float light = dot(tone.rgb, vec3(.2126, .7152, .0722)), level = mix(1.0 - light, light, uOnDark);
+  float index = floor(clamp(level * 1.15, 0.0, 1.0) * (${ASCII_RAMP} - 1.0) + .5);
   float glyph = smoothstep(.08, .55, texture2D(uGlyphs, vec2((index + clamp(local.x, .04, .96)) / ${ASCII_ALL}, local.y)).a);
-  // Under the type, a ghost of the face itself (smooth, at this very point), so he is known at a glance.
-  vec2 here = ink(uv);
-  float ghost = here.x * here.y * .32;
-  return vec4(mix(uAsciiInk, uAsciiHot, edge), max(glyph * (.4 + .6 * max(level, edge)), ghost));
+  vec4 here = texture2D(uPhoto, uv);
+  vec3 ground = mix(mix(here.rgb, vec3(1.0), .45), here.rgb * .6, uOnDark);
+  vec3 type = mix(tone.rgb * .5, min(tone.rgb * 1.3 + .05, vec3(1.0)), uOnDark);
+  return vec4(mix(ground, type, glyph), here.a);
 }
 vec2 jitter(vec2 v) { return v + (vec2(hash(v), hash(v + 17.3)) - .5) * .55; }
 vec3 bary(vec2 p, vec2 a, vec2 b, vec2 c) {
@@ -304,8 +308,8 @@ vec3 bary(vec2 p, vec2 a, vec2 b, vec2 c) {
   float y = (v2.x * v1.y - v1.x * v2.y) / d, z = (v0.x * v2.y - v2.x * v0.y) / d;
   return vec3(1.0 - y - z, y, z);
 }
-vec4 artist(vec2 uv, float edge) {
-  float n = uCells * 1.05;
+vec4 artist(vec2 uv) {
+  float n = uCells * 1.9;
   vec2 g = uv * n, c = floor(g);
   vec2 p00 = jitter(c), p10 = jitter(c + vec2(1.0, 0.0)), p01 = jitter(c + vec2(0.0, 1.0)), p11 = jitter(c + vec2(1.0, 1.0));
   // Which of the cell's two triangles (split corner to corner) this is in, and how near its edges.
@@ -313,35 +317,76 @@ vec4 artist(vec2 uv, float edge) {
   bool first = min(b1.x, min(b1.y, b1.z)) >= min(b2.x, min(b2.y, b2.z));
   vec3 b = first ? b1 : b2;
   vec2 mid = (first ? (p00 + p10 + p11) : (p00 + p11 + p01)) / 3.0 / n;
-  vec2 want = ink(mid);
-  // A facet: flat, its tone from its middle, and lit as a modelled surface is: tilted by the face's own slope there
-  // (the light's gradient read as height), the light from up and to the left.
-  float e = 1.5 / n;
-  float gx = ink(mid + vec2(e, 0.0)).x - ink(mid - vec2(e, 0.0)).x;
-  float gy = ink(mid + vec2(0.0, e)).x - ink(mid - vec2(0.0, e)).x;
-  vec3 normal = normalize(vec3(-gx * 3.0, -gy * 3.0, 1.0));
-  float light = clamp(dot(normal, normalize(vec3(-.55, .6, .75))), 0.0, 1.0);
-  float facet = clamp(want.x * (.5 + .65 * light) + (hash(c + (first ? .3 : .7)) - .5) * .06, 0.0, 1.0) * want.y;
-  float wire = 1.0 - smoothstep(0.0, .03, min(b.x, min(b.y, b.z)));
-  float a = max(facet * .95, wire * (want.y > .05 ? .32 : .05));
-  return vec4(mix(uAsciiInk, uAsciiHot, max(edge, wire * .25)), a);
+  vec4 tone = texture2D(uPhoto, mid, .5);
+  float shade = 1.0 + (hash(c + (first ? .3 : .7)) - .5) * .1;
+  float wire = 1.0 - smoothstep(0.0, .045, min(b.x, min(b.y, b.z)));
+  return vec4(tone.rgb * shade * (1.0 - wire * .16), smoothstep(.35, .65, tone.a));
 }
 vec4 portrait(vec2 uv) {
-  // The lens: where the pointer is, a circle through which his photograph is seen, larger.
-  float near = distance(uv, uPointer), radius = uNear * uHover;
-  float inside = 1.0 - smoothstep(radius * .9, radius, near);
-  float edge = uHover * exp(-pow((near - radius) / (uNear * .14), 2.0));
-  vec4 drawn = uMode < 1.5 ? engineer(uv, edge) : artist(uv, edge);
-  vec3 photo = texture2D(uPhoto, uPointer + (uv - uPointer) * .62).rgb;
-  float ring = uHover * (1.0 - smoothstep(.0015, .0045, abs(near - radius)));
+  vec4 drawn = uMode < 1.5 ? engineer(uv) : artist(uv);
   float rim = 1.0 - smoothstep(.002, .005, abs(length(vUv - .5) - .468));
-  vec4 mark = vec4(mix(drawn.rgb, photo, inside), max(mix(drawn.a, 1.0, inside), rim * .85));
+  return vec4(mix(drawn.rgb, uAsciiInk, rim * (1.0 - drawn.a)), max(drawn.a, rim * .85));
+}
+/**
+ * The tool's mark. One changed in view (paintFace: off the rope) is printed on: a ring of light runs out from the
+ * middle to the rim (uWipe 0 → 1), the new mark inside it and the old outside, so the change is seen, not a swap.
+ */
+vec4 printed() {
+  vec4 now = texture2D(uMask, vUv);
+  if (uWipe >= 1.0) return now;
+  vec4 before = texture2D(uMaskOld, vUv);
+  float r = length(vUv - .5) * 2.0, front = uWipe * 1.08;
+  vec4 mark = mix(before, now, 1.0 - smoothstep(front - .02, front, r));
+  float ring = (1.0 - smoothstep(0.0, .03, abs(r - front))) * (1.0 - uWipe);
   return vec4(mix(mark.rgb, uAsciiHot, ring), max(mark.a, ring));
+}
+/** Smooth noise, 0 → 1, for stirring the marks as they melt. */
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+/**
+ * One mark melting into another (uMode 3: the about's five years, uMorph 0 → 1). Each mark's shape is how far a
+ * point is from its edge (coinMarks morphField: a half at the edge); the two are mixed and cut at a half, so the one
+ * shape flows into the other. The change runs out from the middle of the face, the rim last; and while a point is
+ * changing, it is liquid: its shape stirred by two drifting noises and a fine ripple running out, smeared a little
+ * sideways with them. Each point takes one mark's colours or the other's (wholly the first's at the start and the
+ * second's at the end, and between, whichever it is deeper in), with a fine seam of light where they meet; round the
+ * moving shape, its outline echoes out over the face in fine rings of its colours, as ink rings out in water; and a
+ * front of light runs out across the whole face with the change, as if the coin were being struck again.
+ */
+vec4 morphed() {
+  float r = length(vUv - .5) * 2.0;
+  float t = smoothstep(0.0, 1.0, clamp(uMorph * 1.3 - r * .3, 0.0, 1.0)), live = sin(3.14159265 * t);
+  vec2 drift = vec2(uTime * .33, -uTime * .27);
+  vec2 warp = vec2(vnoise(vUv * 5.0 + drift + 3.1), vnoise(vUv * 5.0 - drift + 7.7)) - .5;
+  vec2 uv = vUv + warp * .035 * live;
+  vec4 from = texture2D(uMorphA, uv), to = texture2D(uMorphB, uv);
+  float stir = (vnoise(vUv * 7.0 + drift) - .5) * .9 + (vnoise(vUv * 15.0 - drift * 1.6) - .5) * .45;
+  float ripple = sin(r * 34.0 - uTime * 6.0 - uMorph * 20.0);
+  float edge = mix(from.a, to.a, t) + (stir * .055 + ripple * .01) * live;
+  float soft = fwidth(edge) * .8 + 1e-4, shape = smoothstep(.5 - soft, .5 + soft, edge);
+  float own = t - .5 + ((to.a - from.a) * 1.2 + stir * .06) * live, swap = fwidth(own) + 1e-4;
+  vec3 colour = mix(from.rgb, to.rgb, smoothstep(-swap, swap, own));
+  float seam = (1.0 - smoothstep(swap, swap * 2.5, abs(own))) * live;
+  colour = mix(colour, uAsciiHot, seam * .8);
+  // The echoes: a ring at every step out from the edge, moving out with the clock, fading with the distance.
+  float beyond = .5 - edge, ring = beyond / .038 - uTime * 1.2, gap = abs(fract(ring + .5) - .5), fine = fwidth(ring) + 1e-4;
+  float echo = (1.0 - smoothstep(fine * .9, fine * 2.4, gap)) * smoothstep(0.0, .02, beyond) * (1.0 - smoothstep(.03, .16, beyond)) * live;
+  vec3 echoColour = mix(from.rgb, to.rgb, t);
+  float reach = (uMorph * 1.3 - .5) / .3, front = (1.0 - smoothstep(0.0, .02, abs(r - reach))) * sin(3.14159265 * uMorph) * .35 * step(r, .985);
+  vec3 lit = mix(uAsciiHot, echoColour, echo / max(echo + front, 1e-4));
+  return vec4(mix(lit, colour, shape), max(shape, max(echo * .85, front)));
 }
 void main() {
   vec3 color = shadeSurface(vView, normalize(vNormal));
-  vec4 mark = uMode > .5 ? portrait(vUv) : texture2D(uMask, vUv);
-  gl_FragColor = vec4(mix(color, mark.rgb, mark.a * uMarkOpacity), 1.0);
+  vec4 mark = uMode > 2.5 ? morphed() : uMode > .5 ? portrait(vUv) : printed();
+  vec3 face = mix(color, mark.rgb, mark.a * uMarkOpacity);
+  // A glint (uGlint 0 → 1): a band of light (the letters' own glint) run once across the face, corner to corner, as a new coin catches it.
+  float band = (vUv.x + vUv.y) * .5 - (uGlint * 1.5 - .25);
+  face += uHighlight * exp(-band * band / .0035) * sin(3.14159265 * uGlint) * .9;
+  gl_FragColor = vec4(face, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
@@ -385,6 +430,11 @@ class DotStage {
     /** Where the coin rests in the work, eased to the project on show's tools line. */
     this.sealAt = null;
     this.flip = { angle: 0 };
+    /** The coin's tour of the tools on the rope (ropeTour.js), and the spring of its lean (balance). */
+    this.tour = null;
+    this.balanceLean = { a: 0, v: 0 };
+    /** Off the rope: where it stood on it and the tool it showed (leaveRope), to go back to; null once it is on the book again. */
+    this.seat = null;
     /** The coin in the work: the tool it shows, and the turn to the next. */
     this.seal = { shown: null, project: -1, index: 0, hold: 0, turns: 0, progress: 0, flip: null };
     /**
@@ -409,13 +459,13 @@ class DotStage {
     this.aboutEnter = 0;
     this.aboutOn = false;
     this.aboutFrom = null;
-    /** The hop (stepHop): 'rope' (on it), 'up' (to the card), 'card' (on it), 'down' (back to the rope), and how far through it is. */
+    /** The hop (stepHop): 'rope' (on it), 'up' (to the card), 'card' (on it), 'down' (back to the rope), how far through it is, and where it is `heading` ('card' or 'rope'). */
     this.hop = { phase: 'rope', t: 0, start: null };
     /** How far the ring of reviews round the coin is open (0 → 1, by the clock: it opens once the coin is on the card). */
     this.ringOpen = 0;
     this.aboutTilt = { x: 0, y: 0, rest: 0 };
     /** The reader's hand on the coin on the card: its turn and spin, whether held, the pointer over it, a tap's ring. */
-    this.coinHand = { angle: 0, spin: 0, held: false, over: false, u: .5, v: .5, hover: 0 };
+    this.coinHand = { angle: 0, spin: 0, held: false, over: false, from: 0, target: null, rest: 0 };
   }
 
   get mounted() { return Boolean(this.renderer); }
@@ -438,7 +488,11 @@ class DotStage {
     this.uiScene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(FOV, 1, 1, 6000);
     this.solid = createSolidMaterial(this.palette);
+    this.puzzle = new Puzzle();
+    this.puzzle.paint(this.palette);
     this.makeCoin();
+    this.band = new Band(this.coinScene);
+    this.band.paint(this.palette);
     this.makeRow();
     this.warm(this.coinScene, this.coin);
     // The book, its covers plain.
@@ -469,10 +523,12 @@ class DotStage {
     this.stopScheme();
     this.masks.forEach(mask => mask.dispose());
     this.masks.clear();
-    this.dropSketch();
     this.coin.traverse(object => { object.geometry?.dispose(); });
     this.faces.forEach(face => face.material.dispose());
     this.asciiTextures?.forEach(texture => texture.dispose());
+    this.band?.dispose();
+    this.puzzle?.dispose();
+    this.puzzle = null;
     this.row?.coins.forEach(coin => coin.faces.forEach(face => face.material.dispose()));
     this.row = null;
     this.solid.dispose();
@@ -526,15 +582,17 @@ class DotStage {
 
   /**
    * The about, measured by components/about:
-   * `{ top, height, vh, card, line, bench, faces, steps, onTransition }` — `top` and `height` in page px; `card` and
-   * `bench` the coin's places there and `line` the tower (`{ x, y, r, stops: [θ…], tower }`: where its box is, the
-   * coin's radius on its road, the stops' angles round it, and its geometry, tower.js towerLayout), all in px on the
-   * about's pinned screen; `faces` the tool of each stop up the tower, `steps` how many steps the process has.
+   * `{ top, height, vh, card, line, piece, stops, faces, onTransition }` — `top` and `height` in page px; `card` and
+   * `piece` the coin's places there (on the card, and where it leaves for the process), and `line` its place through the
+   * five years (the wheel), all `{ x, y, r }` in px on the about's pinned screen; `stops` how many stops the five
+   * years have and `faces` the tool of each.
    */
   setAbout(about) {
     this.about = about;
     this.aboutKey = null;
     if (!this.renderer || !about) return;
+    // What is engraved round the ring the coin becomes, after the process (stepBand).
+    if (about.more && this.band && this.band.lines !== about.more.engraving) this.band.engrave(about.more.engraving);
     // The ring of glass round it on the card (wide screens: on a narrow one the reviews run as a ticker, components/about).
     if (about.ring && !this.ring) {
       this.ring = new ReviewRing(this.coinScene, about.ring);
@@ -543,6 +601,8 @@ class DotStage {
     }
     // Its faces drawn now, while nothing moves (the portrait's engraving takes a moment).
     [MONOGRAM, ...about.faces].forEach(face => this.maskFor(face));
+    // (And the five years' marks as shapes to melt, one at a time, a little after: each is a moment's work.)
+    about.faces.forEach((face, i) => setTimeout(() => this.morphFor(face), 400 + i * 120));
     this.renderUntil = performance.now() + 100;
   }
 
@@ -577,11 +637,45 @@ class DotStage {
     this.renderUntil = performance.now() + 100;
   }
 
-  /** The next place after position `from` that shows a page, and how long the spin takes to get there. */
+  /**
+   * The next place after position `from` that shows a page, how long the turn there takes, and when in it the
+   * page on show changes (`change`, s: as the book comes half a place from it).
+   */
   nextStep(from) {
     const count = this.work?.projects.length ?? 1;
     const to = itemAt(from + 1, count).cover ? from + 2 : from + 1;
-    return { from, to, clock: 0, duration: SPIN.period * (to - from > 1 ? SPIN.covers : 1) };
+    const duration = SPIN.turn * (to - from > 1 ? SPIN.covers : 1);
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 24; i++) { const x = (lo + hi) / 2; if (spinEase(x) < 1 - .5 / (to - from)) lo = x; else hi = x; }
+    return { from, to, clock: 0, duration, change: duration * hi };
+  }
+
+  /**
+   * Whether the book, turning by itself, may turn on from the page it rests on: once the coin has been along all
+   * of the project's tools (the tour, ropeTour.js), so a project with many is on show as long as they take; with no
+   * coin on the rope, after SPIN.dwell.
+   */
+  turnDue(dt) {
+    if (this.tour) { this.rested = 0; return this.tour.done; }
+    this.rested = (this.rested ?? 0) + dt;
+    return this.rested >= SPIN.dwell;
+  }
+
+  /**
+   * What the coin's tour is asked for (ropeTour stepTour): the project on show, or the one the book is turning to
+   * by itself, with its tools. The coin goes to that one once the page is about to change: tossed so that it is at
+   * the top of its toss as the tags change under it.
+   */
+  tourWant() {
+    let project = this.active, ready = true;
+    if (this.leafMode === 'spin' && this.spin) {
+      const item = itemAt(this.spin.to, this.work.projects.length);
+      if (!item.cover) {
+        project = item.project;
+        ready = project === this.active || this.spin.clock >= this.spin.change - HIGH_TIME / 2 - TOSS.crouch;
+      }
+    }
+    return { project, tools: this.projectTools(project), ready, auto: this.autoplay };
   }
 
   /* ----- the book in the hand ------------------------------------- */
@@ -845,6 +939,7 @@ class DotStage {
   /** Whether the coin is on the rope in the copy: the rope there, and the coin landed on it. */
   balancing() {
     // (Not once it has begun to jump off the rope, nor once it is in the about.)
+    // (The about's screen counts as coming in from .02, the same margin stepHop starts the jump at: no flicker on the line.)
     return Boolean(this.work?.rope && this.k >= 2 && this.tightrope > .5 && !this.pose.onBook && this.liftNow() >= 1 && this.aboutEnter <= 0 && this.hop.phase === 'rope');
   }
 
@@ -889,74 +984,100 @@ class DotStage {
 
   /** Where along the rope (0 → 1) the tag of the `i`th of `count` tools hangs: evenly, clear of the posts (Work.css .work__tool). */
   station(i, count) {
-    return TIGHTROPE.inset + (1 - 2 * TIGHTROPE.inset) * (mod(i, count) + .5) / count;
+    return stationAt(i, count);
   }
 
-  /** The coin standing on the rope at the first tool's tag, as it is now (px, without the pin): where it lands. */
+  /** Where along the rope (0 → 1) the coin's place is while it is off it: where it last stood, or the first tool's tag. */
+  seatAt() {
+    return this.seat?.c ?? this.station(0, this.coinTools().length);
+  }
+
+  /** The coin standing on the rope at its place there, as it is now (px, without the pin): where it lands. */
   ropeSeat() {
     const line = this.ropeLine(), r = this.work.tools?.[0]?.r ?? this.dot.r;
-    const s = this.station(0, this.coinTools().length);
+    const s = this.seatAt();
     return { x: line.x0 + s * (line.x1 - line.x0), y: line.y + this.sagAt(s) - ROPE_HALF - r, r };
   }
 
   /**
-   * The coin on the rope, this frame. It lands right where it was flicked to
-   * (ropeSeat), its weight driving the rope down, which gives and springs back
-   * (TIGHTROPE give) with the coin riding it; then it walks the rope, from tag
-   * to tag (walkTarget), leaning into each walk and bouncing the rope with each
-   * step, and as it stands it leans one way and the other about its foot,
-   * edging to keep its balance, never quite still, as a thing on a tightrope
-   * does. The rope (RopeScrollbar placeLine) and the tags (components/work)
-   * sag with it.
+   * Where the coin stands on the rope, or is coming down onto it (px on the pinned screen, and how far along the
+   * rope): where the hop into the about leaves from.
    */
-  balance(dt, scroll) {
-    const walk = this.walk, count = this.coinTools().length;
-    const target = this.walkTarget(count);
-    const landing = !this.balanceIn;
-    this.balanceIn = Math.min(1, (this.balanceIn ?? 0) + dt * 1.5);
-    if (landing) Object.assign(walk, { c: target, v: 0, dip: 0, dipV: reducedMotion ? 0 : TIGHTROPE.landing, n: this.cycle?.n ?? 0 });
-    if (reducedMotion) Object.assign(walk, { c: target, v: 0, dip: TIGHTROPE.weight, dipV: 0 });
-    else {
-      // Each new step it takes on the rope bounces it again.
-      if ((this.cycle?.n ?? 0) !== walk.n) { walk.n = this.cycle?.n ?? 0; walk.dipV += TIGHTROPE.step; }
-      const steps = Math.max(1, Math.ceil(dt * 240)), h = dt / steps;
-      const [wf, zf] = TIGHTROPE.follow, [wg, zg] = TIGHTROPE.give;
-      for (let i = 0; i < steps; i++) {
-        walk.v += (wf * wf * (target - walk.c) - 2 * zf * wf * walk.v) * h;
-        walk.c += walk.v * h;
-        walk.dipV += (wg * wg * (TIGHTROPE.weight - walk.dip) - 2 * zg * wg * walk.dipV) * h;
-        walk.dip += walk.dipV * h;
-      }
-    }
-    const line = this.ropeLine(), span = line.x1 - line.x0;
-    const r = this.dot.r, coin = this.coin;
-    const t = performance.now() / 1000 * TIGHTROPE.wobble, amount = reducedMotion ? 0 : smootherStep(this.balanceIn);
-    // Into its walk (its speed in px/s), and about its balance as it goes.
-    const into = clamp(walk.v * span * TIGHTROPE.into, -TIGHTROPE.intoMost, TIGHTROPE.intoMost);
-    const lean = amount * (TIGHTROPE.lean * (Math.sin(t) * .65 + Math.sin(t * 2.37 + 1.3) * .35) - into);
-    // Edging the way it leans, to catch itself.
-    const s = clamp(walk.c + amount * TIGHTROPE.edge * r / span * Math.sin(t * .5 + .4), 0, 1);
-    // About the point it stands on: its foot on the rope (where the rope is, sagging under it), its middle over it.
-    const footX = line.x0 + s * span, footY = -(line.y + this.sagAt(s) - ROPE_HALF + this.pinOffset(scroll));
-    coin.position.set(footX - Math.sin(lean) * r, footY + Math.cos(lean) * r, coin.position.z);
-    coin.quaternion.setFromAxisAngle(this._zAxis ??= new THREE.Vector3(0, 0, 1), lean);
+  ropeStand() {
+    const line = this.ropeLine(), r = this.dot.r;
+    const c = this.tour ? tourFooting(this.tour) : this.seatAt();
+    return { x: line.x0 + c * (line.x1 - line.x0), y: line.y + this.sagAt(c) - ROPE_HALF - r, r, c };
   }
 
   /**
-   * Where along the rope the coin is making for (0 → 1): standing at its
-   * tool's tag, or on its way to the next one's (the cycle, set by tick: the
-   * step it is on, and how far through the walk to the next).
+   * The coin on the rope, this frame, as its tour has it (ropeTour.js): standing on the rope where the rope is
+   * under it, squatting to go, in the air over it turning end over end, flattened as it lands; or, staying on the
+   * tool it shows, spun round its upright where it stands, or rolling along the rope on its edge. Standing it sways,
+   * never still; it leans the way it is going, and a landing knocks it that way, to rock and catch itself (the
+   * lean is a damped spring). The rope gives where the tour says (walk: RopeScrollbar and the tags follow it).
    */
-  walkTarget(count) {
-    const cycle = this.cycle;
-    if (!cycle || count < 2) return this.station(0, count);
-    const from = this.station(pace(cycle.n, count), count), to = this.station(pace(cycle.n + 1, count), count);
-    return from + (to - from) * (cycle.f ?? 0);
+  balance(dt, scroll) {
+    const tour = this.tour, walk = this.walk, coin = this.coin;
+    Object.assign(walk, { c: tour.rope.c, dip: tour.rope.dip, v: 0, dipV: 0 });
+    const line = this.ropeLine(), span = line.x1 - line.x0, r = this.dot.r, spring = this.balanceLean;
+    const time = performance.now() / 1000;
+    const sway = tour.phase === 'air' ? 0 : (Math.sin(time * 1.7) * .6 + Math.sin(time * 3.1 + 1) * .4) * TIGHTROPE.sway;
+    // (Leaning to the right is a turn clockwise: negative.)
+    const want = reducedMotion ? 0 : sway - tour.lean * TIGHTROPE.lean;
+    spring.v -= tour.kick * TIGHTROPE.kick;
+    const steps = Math.max(1, Math.ceil(dt * 240)), h = dt / steps, [w, z] = TIGHTROPE.balance;
+    for (let i = 0; i < steps; i++) {
+      spring.v += (w * w * (want - spring.a) - 2 * z * w * spring.v) * h;
+      spring.a += spring.v * h;
+    }
+    const lean = spring.a;
+    // About the point it stands on: its foot on the rope (where the rope is, sagging under it), its middle over it.
+    const footX = line.x0 + tour.c * span, footY = -(line.y + tour.sag - ROPE_HALF + this.pinOffset(scroll));
+    coin.position.set(footX - Math.sin(lean) * r * tour.sy, footY + Math.cos(lean) * r * tour.sy + tour.h * r, coin.position.z);
+    coin.scale.set(r * tour.sx, r * tour.sy, r);
+    // Leaning (and rolling, on its edge); end over end (about the line across it, its top going away from the
+    // reader first); and spun, round its upright.
+    coin.quaternion.setFromAxisAngle(this._zAxis ??= new THREE.Vector3(0, 0, 1), lean + TAU * tour.roll)
+      .multiply((this._tumble ??= new THREE.Quaternion()).setFromAxisAngle(this._xAxis ??= new THREE.Vector3(1, 0, 0), -Math.PI * tour.turns))
+      .multiply((this._twirl ??= new THREE.Quaternion()).setFromAxisAngle(this._yAxis ??= new THREE.Vector3(0, 1, 0), TAU * tour.twirl));
+    // Its sides' marks: the one it came onto the rope on the usual way up, the other the other way up, to come up
+    // right when it is turned end over end. Spun round its upright instead, the side turned away is set the way
+    // the side in view is (changed only while it is turned away: a spin begins and ends square to the reader).
+    const up = tour.phase === 'spin' ? mod(Math.round(tour.turns), 2) : null;
+    this.faces[tour.base].rotation.z = up === 1 ? Math.PI : 0;
+    this.faces[1 - tour.base].rotation.z = up === 0 ? 0 : Math.PI;
   }
 
-  /** Off the rope: it stands empty, sagging by itself; the coin lands at the first tag. */
+  /**
+   * The coin lands on the rope and its tour of the tools begins (ropeTour.js), from its place on the rope
+   * (seatAt), showing `tool`, as it landed. Its two sides: the one facing the reader now (`base`), and the other,
+   * which the toss turns up (balance sets their marks the way up that needs).
+   */
+  startRope(tool) {
+    const tour = startTour(this.active, this.coinTools(), this.seatAt(), tool, reducedMotion ? TIGHTROPE.weight : this.walk.dip);
+    tour.base = mod(Math.round(this.turn.land / Math.PI), 2);
+    tour.clock = performance.now();
+    this.balanceLean = { a: 0, v: 0 };
+    return tour;
+  }
+
+  /**
+   * The coin has left the rope (scrolled back onto the book, or jumping into the about). A toss in the air is
+   * brought down; where it stood and the tool it showed are kept (seat), so it goes on from there, and comes back
+   * to there, with nothing changing in view. Its sides are set back the usual way up: if it is on its other side,
+   * that is the same as having turned over the usual way, about its upright (the base of its turn).
+   */
+  leaveRope() {
+    const { c, tool, over } = endTour(this.tour);
+    if (over) this.turn.land += Math.PI;
+    this.faces.forEach(face => { face.rotation.z = 0; });
+    this.seat = { c, tool };
+    this.tour = null;
+  }
+
+  /** Off the rope: it stands empty, sagging by itself; the coin lands at its place on it (seatAt). */
   restRope() {
-    const walk = this.walk, c = this.station(0, this.coinTools().length);
+    const walk = this.walk, c = this.seatAt();
     if (walk.dip === 0 && walk.c === c && walk.dipV === 0) return false;
     Object.assign(walk, { c, v: 0, dip: 0, dipV: 0 });
     return true;
@@ -1095,8 +1216,8 @@ class DotStage {
   /** Move the book on by `dt`: the hand, the spring, or its own spin. Returns whether it moved. */
   stepLeaf(dt) {
     const leaf = this.leaf;
-    // On its own: from rest, a step at a time, round and round.
-    if (this.autoplay && this.leafMode === 'rest') {
+    // On its own: from rest, a step at a time, round and round, each once the coin has been along the page's tools.
+    if (this.autoplay && this.leafMode === 'rest' && this.turnDue(dt)) {
       this.spin = this.nextStep(Math.round(leaf.at));
       this.leafMode = 'spin';
     }
@@ -1114,12 +1235,7 @@ class DotStage {
           this.onActive?.(item.project);
         }
       } else {
-        spin.clock += dt;
-        while (spin.clock >= spin.duration) {
-          const over = spin.clock - spin.duration;
-          spin = this.spin = this.nextStep(spin.to);
-          spin.clock = over;
-        }
+        spin.clock = Math.min(spin.duration, spin.clock + dt);
         const x = spin.clock / spin.duration;
         leaf.at = spin.from + (spin.to - spin.from) * spinEase(x);
         leaf.velocity = (spin.to - spin.from) * spinSpeed(x) / spin.duration;
@@ -1133,6 +1249,12 @@ class DotStage {
         this.active = item.project;
         this.onActive?.(item.project);
       }
+    }
+    // Turned: it rests on the page (turnDue).
+    if (this.leafMode === 'spin' && this.spin.clock >= this.spin.duration) {
+      this.spin = null;
+      this.leafMode = 'rest';
+      this.rested = 0;
     }
     const lean = this.lean, ease = reducedMotion ? 1 : 1 - Math.exp(-dt * 5);
     const leanWas = lean.x + lean.y;
@@ -1187,7 +1309,8 @@ class DotStage {
     this.row?.coins.forEach(coin => coin.faces.forEach(face => paintSolid(face.material, this.palette)));
     this.book?.paint(this.palette);
     this.ring?.paint(this.palette);
-    if (this.sketch) Object.values(this.sketch).forEach(lines => lines.material.color.set(this.palette.ink));
+    this.band?.paint(this.palette);
+    this.puzzle?.paint(this.palette);
     this.renderUntil = performance.now() + 100;
   }
 
@@ -1212,12 +1335,10 @@ class DotStage {
     // The ASCII portrait's sources: the characters, and the portrait's light (drawn again once the photo is in).
     const glyphs = new THREE.CanvasTexture(asciiAtlas());
     const redraw = texture => () => { texture.needsUpdate = true; this.renderUntil = performance.now() + 100; };
-    const field = new THREE.CanvasTexture(portraitField());
-    portraitField(redraw(field));
     const photo = new THREE.CanvasTexture(portraitPhoto());
     photo.colorSpace = THREE.SRGBColorSpace;
     portraitPhoto(redraw(photo));
-    this.asciiTextures = [glyphs, field, photo];
+    this.asciiTextures = [glyphs, photo];
     this.faces = [0, 1].map(side => {
       const material = new THREE.ShaderMaterial({
         vertexShader: LIT_VERTEX,
@@ -1229,10 +1350,10 @@ class DotStage {
           uMark: { value: new THREE.Color() },
           uRoughness: { value: .48 },
           uMarkOpacity: { value: 0 },
-          uMask: { value: this.blankMask() },
-          uMode: { value: 0 }, uOnDark: { value: 0 }, uCells: { value: 42 }, uHover: { value: 0 }, uTime: { value: 0 },
-          uNear: { value: .2 }, uPointer: { value: new THREE.Vector2(.5, .5) },
-          uField: { value: field }, uGlyphs: { value: glyphs }, uPhoto: { value: photo },
+          uMask: { value: this.blankMask() }, uMaskOld: { value: this.blankMask() }, uWipe: { value: 1 },
+          uMorphA: { value: this.blankMask() }, uMorphB: { value: this.blankMask() }, uMorph: { value: 0 }, uGlint: { value: 0 },
+          uMode: { value: 0 }, uOnDark: { value: 0 }, uCells: { value: 42 }, uTime: { value: 0 },
+          uGlyphs: { value: glyphs }, uPhoto: { value: photo },
           uAsciiInk: { value: new THREE.Color() }, uAsciiHot: { value: new THREE.Color() },
         },
       });
@@ -1272,46 +1393,6 @@ class DotStage {
     const z = ((box.max.z - box.min.z) / 2 + .04) / radius;
     this.faces.forEach((face, side) => { face.position.z = side ? -z : z; });
     this.syncRow();
-    // The drawings of it (the about's bench) are of the old shape: drawn again when next asked for.
-    this.dropSketch();
-  }
-
-  /**
-   * The coin as a drawing, for the about's bench (aboutTransition SKETCH): its
-   * outline (the edges of its rim and bevel, as it would be sketched) and its
-   * wireframe (every edge of the mesh, as it is modelled), in ink, round the
-   * same shape, turning with it. Made the first time they are asked for.
-   */
-  makeSketch() {
-    if (this.sketch) return;
-    const geometry = this.coinBody.geometry;
-    const ink = opacity => new THREE.LineBasicMaterial({ color: this.palette.ink, transparent: true, opacity, depthWrite: false });
-    this.sketch = {
-      outline: new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 24), ink(.95)),
-      wire: new THREE.LineSegments(new THREE.WireframeGeometry(geometry), ink(.3)),
-    };
-    Object.values(this.sketch).forEach(lines => { lines.visible = false; this.spinner.add(lines); });
-  }
-
-  dropSketch() {
-    if (!this.sketch) return;
-    Object.values(this.sketch).forEach(lines => { lines.removeFromParent(); lines.geometry.dispose(); lines.material.dispose(); });
-    this.sketch = null;
-  }
-
-  /**
-   * What the coin is (aboutTransition SKETCH): its outline, its wireframe, or
-   * (anything else, or null) the solid coin with its faces. Changed only while
-   * it is edge on, as a face's mark is, so the change is never seen.
-   */
-  showSketch(kind) {
-    const drawn = kind === SKETCH.outline || kind === SKETCH.wire;
-    if (drawn) this.makeSketch();
-    this.coinBody.visible = !drawn;
-    this.faces.forEach(face => { face.visible = !drawn; });
-    if (!this.sketch) return;
-    this.sketch.outline.visible = kind === SKETCH.outline;
-    this.sketch.wire.visible = kind === SKETCH.wire;
   }
 
   /**
@@ -1406,11 +1487,28 @@ class DotStage {
     return Boolean(wave);
   }
 
-  /** A face (its mesh) showing `tool`'s mark, or Saad's face (PORTRAIT in ASCII, MESH in polygons), or (SKETCH, none) nothing. */
-  paintFace(face, tool) {
-    const u = face.material.uniforms, mode = tool === PORTRAIT ? 1 : tool === MESH ? 2 : 0;
+  /**
+   * A face (its mesh) showing `tool`'s mark, or Saad's face (PORTRAIT in ASCII, MESH in polygons), or (none)
+   * nothing; or (LINE) the five years' mark, melting from one stop's to the next's as far as `aboutMorph` says.
+   */
+  paintFace(face, tool, wipe = false) {
+    const u = face.material.uniforms;
+    if (tool === LINE) {
+      const { from, to, t } = this.aboutMorph ?? {};
+      face.userData.tool = LINE;
+      u.uMode.value = from ? 3 : 0;
+      if (from) { u.uMorphA.value = this.morphFor(from); u.uMorphB.value = this.morphFor(to); u.uMorph.value = t; }
+      return;
+    }
+    const mode = tool === PORTRAIT ? 1 : tool === MESH ? 2 : 0;
+    const next = mode || !tool ? null : tool, previous = face.userData.tool === LINE ? null : face.userData.tool ?? null;
     u.uMode.value = mode;
-    u.uMask.value = mode || !tool || Object.values(SKETCH).includes(tool) ? this.blankMask() : this.maskFor(tool);
+    if (next !== previous) {
+      face.userData.tool = next;
+      // A mark changing in view on a face that had one is printed on from the middle out; otherwise it is simply there.
+      if (wipe && next && previous) { u.uMaskOld.value = u.uMask.value; u.uWipe.value = 0; } else u.uWipe.value = 1;
+    }
+    u.uMask.value = next ? this.maskFor(next) : this.blankMask();
   }
 
   blankMask() {
@@ -1427,6 +1525,8 @@ class DotStage {
    * drawing the hero's coin uses), in the version made for this coin's ground.
    */
   maskFor(tool) {
+    // (What the coin says in the process: set in the ground's colour, cut through the coin; coinWords.)
+    if (tool === MINE || tool === YOURS) return this.wordsFor(tool);
     const dark = isDark(this.palette.figure);
     const key = `${tool}|${dark}`;
     if (this.masks.has(key)) return this.masks.get(key);
@@ -1441,9 +1541,83 @@ class DotStage {
     return texture;
   }
 
+  /** The coin's words in the process (coinWords), as a face's mark: drawn again once the display face is in. */
+  wordsFor(words) {
+    const colour = this.palette.ground, key = `${words}|${colour}`;
+    if (this.masks.has(key)) return this.masks.get(key);
+    const canvas = coinWords(document.createElement('canvas'), colour, -1, words), texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    this.masks.set(key, texture);
+    document.fonts?.ready.then(() => {
+      coinWords(canvas, colour, -1, words);
+      texture.needsUpdate = true;
+      this.renderUntil = performance.now() + 100;
+    });
+    return texture;
+  }
+
+  /**
+   * What the coin says at `m` in the process (processTransition wordTurn, coinWords), as a face's mark: one canvas, drawn
+   * again only as the scroll moves a turn along, and left alone between them.
+   */
+  coinSays(m) {
+    const turn = wordTurn(m, reducedMotion), ground = this.palette.ground;
+    let texture = this.masks.get('words:said');
+    if (!texture) {
+      texture = new THREE.CanvasTexture(document.createElement('canvas'));
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 4;
+      this.masks.set('words:said', texture);
+      this.saidKey = null;
+      // (Drawn again once its face is in.)
+      loadWordsFace().then(() => { this.saidKey = null; this.renderUntil = performance.now() + 100; });
+    }
+    const moving = turn && turn.u < 1, u = moving ? Math.round(turn.u * SAID_STEPS) / SAID_STEPS : 1;
+    const key = `${moving ? turn.from : ''}|${turn ? turn.to : -1}|${u}|${ground}`;
+    if (key !== this.saidKey) {
+      this.saidKey = key;
+      coinWords(texture.image, ground, turn ? turn.from : -1, turn ? turn.to : -1, u);
+      texture.needsUpdate = true;
+    }
+    return texture;
+  }
+
+  /**
+   * The tool's mark as a shape to melt (coinMarks morphField), for the about's five years: empty until it is made
+   * (it is made once its mark is drawn, a moment's work, after that), then the field.
+   */
+  morphFor(tool) {
+    const dark = isDark(this.palette.figure), key = `morph|${tool}|${dark}`;
+    if (this.masks.has(key)) return this.masks.get(key);
+    const S = MORPH.size, texture = new THREE.DataTexture(new Uint8Array(S * S * 4), S, S, THREE.RGBAFormat);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
+    texture.needsUpdate = true;
+    this.masks.set(key, texture);
+    morphField(tool, dark, ({ data }) => {
+      texture.image.data.set(data);
+      texture.needsUpdate = true;
+      this.renderUntil = performance.now() + 100;
+    });
+    return texture;
+  }
+
   /** What the coin turns through in the work: the project on show's tools, or with none, the skills. */
   coinTools() {
     return this.active >= 0 ? this.projectTools(this.active) : COIN_SKILLS;
+  }
+
+  /**
+   * Another tool than `tool`, for the coin to turn up as it is tossed into the about: the next of the project on
+   * show's, or (that has one only) of the skills.
+   */
+  otherTool(tool) {
+    const tools = this.coinTools();
+    if (tools.length > 1) return tools[mod(tools.indexOf(tool) + 1, tools.length)];
+    return COIN_SKILLS.find(skill => skill !== tool) ?? tool;
   }
 
   /** The tools of project `i` the coin has a face for, in the project's order. */
@@ -1520,6 +1694,8 @@ class DotStage {
     this.engaged = false;
     this.k = this.kRaw = 0;
     this.gate = null;
+    if (this.tour) this.leaveRope();
+    this.seat = null;
     this.coin.visible = false;
     this.book.group.visible = false;
     const home = this.home ?? this.hero.dotPoint();
@@ -1806,20 +1982,16 @@ class DotStage {
     this.renderer.render(this.workScene, this.camera);
     // The coin over everything, except while it lies in its seat on the cover: then it is part of the book.
     if (!(this.coinSeated && this.coin.visible && this.pose?.onBook)) this.renderer.clearDepth();
-    const clip = this.coinClip;
-    if (clip) {
-      // Round the back of the about's tower (stepAbout): drawn everywhere but over the column, a piece at a time
-      // (scissor boxes in px from the foot of the canvas): beside it to the left, to the right, and over its top.
-      const W = this.viewW || window.innerWidth, H = this.viewH || window.innerHeight;
-      const top = clamp(clip.top, 0, H);
+    // The process's puzzle (the coin in pieces), under the head's line only.
+    if (this.puzzle?.group.visible) {
+      const height = this.viewH || window.innerHeight, { top = 0, bottom = height } = this.puzzleClip ?? {};
+      const below = Math.min(height, bottom), above = Math.max(0, Math.min(below, top));
       this.renderer.setScissorTest(true);
-      for (const [x, y, w, h] of [[0, 0, clip.x0, H], [clip.x1, 0, W - clip.x1, H], [clip.x0, H - top, clip.x1 - clip.x0, top]]) {
-        if (w <= 0 || h <= 0) continue;
-        this.renderer.setScissor(x, y, w, h);
-        this.renderer.render(this.coinScene, this.camera);
-      }
+      this.renderer.setScissor(0, height - below, this.viewW || window.innerWidth, below - above);
+      this.renderer.render(this.puzzle.scene, this.camera);
       this.renderer.setScissorTest(false);
-    } else this.renderer.render(this.coinScene, this.camera);
+    }
+    this.renderer.render(this.coinScene, this.camera);
     this.renderer.clearDepth();
     this.renderer.render(this.uiScene, this.camera);
   }
@@ -1866,7 +2038,6 @@ class DotStage {
     coin.position.set(x, -y, 0);
     coin.scale.setScalar(r);
     coin.quaternion.identity();
-    this.showSketch(null);
     // The seal: Saad's monogram, or once they have signed, the reader's own. The side toward them shows the one they
     // have seen (`seen`); a new one (`face`) goes on the side facing away, and comes round as the coin turns over.
     const facing = mod(Math.round(pose.spin / Math.PI), 2);
@@ -1885,6 +2056,179 @@ class DotStage {
     return true;
   }
 
+  /* ----- the process: the puzzle --------------------------------------- */
+
+  /**
+   * The process, laid out by components/process: `{ top, height, vh, clip, disc, spots, labels, tall }` — its place on
+   * the page (px); how far down its pinned screen the puzzle starts (`clip`: the head's line); and on the pinned screen
+   * the coin's place, `{ x, y, r }`, where each of its eight outer pieces goes as it comes apart (`spots`), what each is
+   * (`labels`), and whether the screen is upright (Puzzle build).
+   */
+  setProcess(process) {
+    this.process = process;
+    this.puzzleBuilt = false;
+    this.renderUntil = performance.now() + 100;
+  }
+
+  /**
+   * The process, this frame (processTransition has the choreography, all of it with the scroll). The coin comes over
+   * from the five years to its place in the middle of this screen, face on, his words on it (stepAbout: until then it
+   * is the about's). There, once the light starts to show its seams, the puzzle takes
+   * over from it (Puzzle place): the coin itself in pieces, put together, the same size, thickness and light, so what
+   * changes in view is only the seams coming up; it opens, scatters and is drawn back in, and once its seams have shut
+   * again the coin takes over from it, where it is, and a glint runs over it. Returns whether to draw.
+   */
+  stepProcess(dt, scroll) {
+    const process = this.process, coin = this.coin, puzzle = this.puzzle;
+    if (!process || !puzzle) return false;
+    const vh = process.vh, m = (scroll - process.top) / vh, end = (process.height - vh) / vh;
+    // (Before it the about has the coin, and after it the ring's screen does: stepBand.)
+    if (m <= -1 || m > end) {
+      if (puzzle.group.visible) puzzle.group.visible = false;
+      return this.processOn !== (this.processOn = false);
+    }
+    this.processOn = true;
+    const t = processTransition(m, reducedMotion);
+    const off = clamp(scroll, process.top, process.top + process.height - vh) - scroll;
+    const { disc } = process;
+    // (Until it has come over from the five years, the coin is the about's: stepAbout.)
+    if (m < 0) {
+      if (puzzle.group.visible) puzzle.group.visible = false;
+      return true;
+    }
+    // The coin itself, whenever it is whole: here while its seams are shut.
+    if (t.reveal <= .001) {
+      puzzle.group.visible = false;
+      coin.visible = true;
+      coin.position.set(disc.x, -(disc.y + off), 0);
+      coin.scale.setScalar(disc.r);
+      coin.quaternion.identity();
+      this.aligner.rotation.set(0, 0, 0);
+      this.ring?.hide();
+      // What it says on both sides (whichever is up), face on (coinSays); and once it is whole again, a glint run over it.
+      this.faces.forEach(side => {
+        this.paintFace(side, YOURS);
+        side.material.uniforms.uMask.value = this.coinSays(m);
+        side.material.uniforms.uMarkOpacity.value = 1;
+        side.material.uniforms.uGlint.value = t.glint;
+      });
+      this.spinner.rotation.y = Math.round(this.spinner.rotation.y / Math.PI) * Math.PI;
+      return true;
+    }
+    // Opened up: the puzzle, as thick as the coin is at its size.
+    coin.visible = false;
+    this.ring?.hide();
+    if (!this.puzzleBuilt) {
+      const body = this.coinBody.geometry;
+      body.computeBoundingBox();
+      puzzle.build(process, (body.boundingBox.max.z - body.boundingBox.min.z) * disc.r);
+      this.puzzleBuilt = true;
+    }
+    puzzle.group.visible = true;
+    // (Cut off at the head's line as its screen comes up, and at the head, which stays, as it scrolls away; and at the
+    // foot of its screen.)
+    this.puzzleClip = { top: off >= 0 ? process.clip + off : process.clip, bottom: off + vh };
+    puzzle.place({ m, off, t, words: this.coinSays(m), reduced: reducedMotion });
+    return true;
+  }
+
+  /* ----- after the process: the ring -------------------------------- */
+
+  /**
+   * The coin, after the about's pinned screen, becoming a ring (Band) with the band of words threaded through it
+   * (moreTransition has the choreography; components/about: `about.more`, `{ top, height, vh, spot, band, engraving }`:
+   * its pinned screen's place on the page, and on it the ring's place and size, `{ x, y, r }`, and the band of words'
+   * box, `{ top, bottom, left, right }`, px; and what is engraved round it). All of it with the scroll:
+   *
+   *   arrive   the coin following the reader down out of the process (the puzzle shut into it again: stepProcess) to the middle of the
+   *            new screen, face on, turning once round its middle as it comes;
+   *   melt     a ring of light running out over its face to the rim, the reader's words washed off before it (its faces'
+   *            print-on wipe, run backwards and by the scroll);
+   *   form     the plain coin, swapped for the ring's first shape (face on, they are the same), punched out: a hole
+   *            opening at its middle, then its rim deepening into a band as it tips into its lean (BAND_POSE), turning;
+   *   engrave  the words written round it;
+   *   thread   the band of words, as the page draws it out through the ring, threaded: what of the ring is behind it
+   *            seen only faintly through it.
+   *
+   * After that it turns round its axis as the reader scrolls, and goes with the screen once it scrolls on. Returns
+   * whether to draw.
+   */
+  stepBand(scroll) {
+    const about = this.about, more = about?.more, band = this.band;
+    if (!more || !band) return false;
+    const vh = more.vh, m = (scroll - more.top) / vh;
+    const off = clamp(scroll, more.top, more.top + more.height - vh) - scroll;
+    const R = more.spot.r / BAND.outer, x0 = more.spot.x, y0 = more.spot.y + off;
+    const faces = this.faces;
+    // (The coin's faces, given back their own mark once the scroll has gone back up past the wash.)
+    const unwash = () => {
+      if (!this.bandWashed) return;
+      this.bandWashed = false;
+      faces.forEach(face => { face.material.uniforms.uWipe.value = 1; });
+    };
+    if (m <= -1 || y0 < -R * 2.4) {
+      unwash();
+      const was = this.bandOn;
+      this.bandOn = false;
+      if (band.group.visible) band.hide();
+      if (was && m > -1) this.coin.visible = false;
+      return was;
+    }
+    this.bandOn = true;
+    const t = moreTransition(m, reducedMotion);
+    const zAxis = this._zAxis ??= new THREE.Vector3(0, 0, 1);
+    if (t.form <= 0) {
+      // The coin itself: on its way down to the middle of the screen, then there, face on, its mark washed off.
+      band.hide();
+      // (From its place in the puzzle, scrolling away with the process's screen.)
+      const process = this.process;
+      const end = process ? process.top + process.height - process.vh : about.top + about.height - about.vh;
+      const from = process ? process.disc : about.piece;
+      const fromY = from.y + (end - scroll);
+      const e = t.arrive;
+      const x = from.x + (x0 - from.x) * e, y = fromY + (y0 - fromY) * e, r = from.r + (R - from.r) * e;
+      this.coin.visible = true;
+      this.coin.position.set(x, -y, 0);
+      this.coin.scale.setScalar(r);
+      // (Face on; and, as it comes, once round its own middle, a coin set down spinning.)
+      this.coin.quaternion.setFromAxisAngle(zAxis, reducedMotion ? 0 : -TAU * e);
+      this.aligner.rotation.set(0, 0, 0);
+      this.ring?.hide();
+      // (The reader's words, both sides, as the process left them: not whatever the journey above gave its faces.)
+      faces.forEach(face => { this.paintFace(face, YOURS); face.material.uniforms.uMarkOpacity.value = 1; face.material.uniforms.uGlint.value = 0; });
+      if (t.melt > 0) {
+        this.bandWashed = true;
+        const mark = this.maskFor(YOURS), blank = this.blankMask();
+        faces.forEach(face => {
+          const u = face.material.uniforms;
+          u.uMode.value = 0;
+          u.uMaskOld.value = mark;
+          u.uMask.value = blank;
+          u.uWipe.value = t.melt;
+        });
+      } else unwash();
+      return true;
+    }
+    // The ring: punched out of the coin, tipping into its lean, engraved; turning round its axis as the reader goes on.
+    unwash();
+    this.coin.visible = false;
+    this.ring?.hide();
+    const pose = this._bandPose ??= new THREE.Quaternion().setFromEuler(new THREE.Euler(...BAND_POSE.euler, 'YXZ'));
+    const turned = this._bandTurned ??= new THREE.Quaternion();
+    turned.slerpQuaternions(this._still ??= new THREE.Quaternion(), pose, t.tilt);
+    const formed = Math.max(0, m - MORE.FORM[1]);
+    // The band of words as it is drawn out through the ring: a thread from its middle to the rails, then opening.
+    const b = more.band, cy = (b.top + b.bottom) / 2 + off, half = Math.max(1.5, (b.bottom - b.top) / 2 * t.open);
+    band.place({
+      x: x0, y: y0, r: R, quaternion: turned,
+      spin: reducedMotion ? BAND_POSE.spin : BAND_POSE.spin * t.tilt + formed * vh * BAND.turn,
+      hole: smootherStep(clamp(t.form / MORE.hole, 0, 1)), depth: t.tilt, engrave: t.engrave,
+      band: t.thread > 0 ? { top: cy - half, bottom: cy + half, left: x0 - (x0 - b.left) * t.thread, right: x0 + (b.right - x0) * t.thread } : null,
+      viewH: this.viewH || window.innerHeight, dpr: this.renderer.getPixelRatio(),
+    });
+    return true;
+  }
+
   /** How far the about's screen has come up at this scroll: 0 its top still below the screen, 1 pinned (and on). */
   aboutEnterAt(scroll) {
     const about = this.about;
@@ -1893,8 +2237,9 @@ class DotStage {
 
   /** Tell components/about what the page shows (aboutTransition), when that changes. */
   reportAbout(state) {
-    const key = [state.enter, state.title, state.lede, state.card, state.line, state.bench, state.stopOn, state.stepOn, state.climb ?? 0]
-      .map(value => value.toFixed(4)).join('|');
+    // (How far through the five years finer than the rest: the page sets its words and the coin's trail by it.)
+    const key = [state.enter, state.title, state.lede, state.card, state.line, state.lineIn, state.lineOut, state.stopOn]
+      .map(value => value.toFixed(4)).join('|') + '|' + state.along.toFixed(5);
     if (key === this.aboutKey) return;
     this.aboutKey = key;
     this.about.onTransition?.(state);
@@ -1909,46 +2254,39 @@ class DotStage {
    *           about's screen as that comes up, growing as it comes;
    *   card    there, turning over to the portrait, swaying a little and
    *           leaning toward the pointer;
-   *   line    down onto the tower's road (tower.js), and up it from stop to
-   *           stop: rolling on its edge, whole turns, so it stands upright at
-   *           each, where it turns round to the reader and over to that
-   *           stop's tool; between stops it turns with the road, edge on at
-   *           the column's sides, and round the back it is hidden by the
-   *           column (render: coinClip), coming out the other side;
-   *   bench   off the summit to its place beside the process, where each step
-   *           makes it again (its outline, its wireframe, plain, finished).
+   *   line    over to its place in the five years, tipping back and leaning
+   *           as it goes, a wheel seen from the side (WHEEL); there it
+   *           holds still, and the mark on its face melts from each stop's
+   *           tool into the next's;
+   *   toProcess on to the process: straightening up out of the wheel, face on,
+   *           across to its place in the middle of the room and down to its
+   *           size there, its mark fading off and its face starting to say how a
+   *           project goes (coinSays).
    *
    * Before the about it does nothing but note where the coin stands on the
    * rope, for the jump to leave from. Returns whether to draw.
    */
   stepAbout(dt, scroll) {
     const about = this.about, coin = this.coin;
-    // Hidden by the tower only while it is round the back of it (below), this frame.
-    this.coinClip = null;
     if (!about || (this.aboutEnter <= 0 && this.hop.phase === 'rope')) {
       // On the rope (on the pinned work's screen, without the pin): where it will jump from.
-      if (coin.visible) this.aboutFrom = { x: coin.position.x, y: -coin.position.y - (this.work ? this.pinOffset(scroll) : 0), r: coin.scale.x, c: this.walk.c };
+      // (On its feet there: not where a toss has it in the air.)
+      if (coin.visible) this.aboutFrom = this.work?.rope && this.ropeLine() && (this.tour || this.seat) ? this.ropeStand()
+        : { x: coin.position.x, y: -coin.position.y - (this.work ? this.pinOffset(scroll) : 0), r: coin.scale.x, c: this.walk.c };
       if (!this.aboutOn) return false;
       this.aboutOn = false;
-      this.aboutCame = null;
+      this.aboutCame = this.aboutTurned = this.hopMarks = null;
+      if (!this.tour) this.faces.forEach(mesh => { mesh.rotation.z = 0; });
       this.ring?.hide();
-      this.showSketch(null);
-      this.reportAbout(aboutTransition(-1, about?.line.stops.length ?? 1, about?.steps ?? 1, reducedMotion));
+      this.reportAbout(aboutTransition(-1, about?.stops ?? 1, reducedMotion));
       return true;
     }
     this.aboutOn = true;
-    const vh = about.vh, n = about.line.stops.length;
+    const vh = about.vh, n = about.stops;
     const q = clamp((scroll - about.top) / vh, 0, (about.height - vh) / vh) + this.aboutEnter - 1;
-    const state = aboutTransition(q, n, about.steps, reducedMotion);
+    const state = aboutTransition(q, n, reducedMotion);
     const mix = (a, b, t) => a + (b - a) * t;
-    const { card, line, bench } = about;
-    const tower = line.tower, angles = line.stops;
-    // How far up the tower's road the coin has come (rad round the column), for the page to draw the road behind it:
-    // from its foot as the coin drops onto the first stop, to the summit once it has left.
-    state.climb = state.seg === 'jump' || state.seg === 'card' ? tower.from
-      : state.seg === 'toLine' ? mix(tower.from, angles[0], state.e)
-        : state.seg === 'line' ? mix(angles[state.stop], angles[Math.min(n - 1, state.stop + 1)], state.travel)
-          : tower.to;
+    const { card, line } = about;
     this.reportAbout(state);
     // The about's screen: coming up from below (its top's distance down the screen), pinned (0), or scrolled away.
     const offset = clamp(scroll, about.top, about.top + about.height - vh) - scroll;
@@ -1956,17 +2294,13 @@ class DotStage {
     if (gone) { coin.visible = false; this.ring?.hide(); return this.aboutWasGone !== (this.aboutWasGone = true); }
     this.aboutWasGone = false;
 
-    // On the tower's road at angle θ: standing on it, its middle a radius over the road's.
-    const onTower = angle => {
-      const at = towerAt(tower, angle);
-      return { x: line.x + at.x, y: line.y + at.y - line.r, r: line.r };
-    };
-    const stopAt = i => onTower(angles[i]);
-    // Turned the way the road goes round the column (its face square to the column's), or, at a stop, partly round
-    // to face the reader (TOWER face) for its tool to be seen.
-    const roundAt = (angle, facing) => Math.atan2(Math.sin(angle), Math.cos(angle)) * (1 - TOWER.face * facing);
-    const lift = e => (reducedMotion ? 0 : Math.sin(Math.PI * e) * ABOUT_COIN.arc * vh);
-    let x, y, r, roll = 0, yaw = 0;
+    // (A curve from `a` through `b` to `c`, `t` of the way: past its end for a `t` over 1.)
+    const curve = (a, b, c, t) => ({ x: (1 - t) ** 2 * a.x + 2 * (1 - t) * t * b.x + t * t * c.x, y: (1 - t) ** 2 * a.y + 2 * (1 - t) * t * b.y + t * t * c.y });
+    // (Out past where it is going and back, `over` of the way: an ease that overshoots.)
+    const past = (t, over) => 1 + (over + 1) * (t - 1) ** 3 + over * (t - 1) ** 2;
+    // (Arriving with a wobble: past, back, and still, as a thing set down does, `u` of the way.)
+    const settle = (u, swing) => (u <= 0 ? 0 : u >= 1 ? 1 : 1 - Math.exp(-5 * u) * Math.cos(swing * u) * (1 - u ** 6));
+    let x, y, r, roll = 0, tipK = 0, leanK = 0;
     const e = state.e;
     // Squashed and stretched (across, and up and down the screen), as a thing with some give in it is.
     let sx = 1, sy = 1, leap = 0;
@@ -1977,28 +2311,37 @@ class DotStage {
     } else {
       if (state.seg === 'card') ({ x, y, r } = card);
       else if (state.seg === 'toLine') {
-        const to = stopAt(0);
-        x = mix(card.x, to.x, e); y = mix(card.y, to.y, e) - lift(e); r = mix(card.r, to.r, e);
-        yaw = roundAt(angles[0], 1) * e;
+        // Over to the five years: a swoop up and round, down into its place, a touch past it and back, growing (and
+        // a touch over its size) and spinning into place; then, already showing its first mark, it is set down as
+        // the wheel, tipping and leaning with a wobble, as a wheel stood up does.
+        const p = clamp(state.p, 0, 1), go = reducedMotion ? e : past(p, 1.05);
+        ({ x, y } = curve(card, { x: mix(card.x, line.x, .62), y: Math.min(card.y, line.y) - vh * .15 }, line, go));
+        r = mix(card.r, line.r, reducedMotion ? e : past(p, 1.7));
+        if (!reducedMotion) roll = (1 - past(p, 0)) * .9;
+        const u = clamp((p - .3) / .7, 0, 1);
+        tipK = reducedMotion ? e : settle(u, 9);
+        leanK = reducedMotion ? e : settle(u, 7);
       } else if (state.seg === 'line') {
-        const i = state.stop, j = Math.min(n - 1, i + 1), t = state.travel;
-        const angle = mix(angles[i], angles[j], t);
-        ({ x, y, r } = onTower(angle));
-        // Rolling up the road, a whole number of turns from stop to stop (by the length of the road between them,
-        // round the column and up it): upright at each.
-        const length = Math.abs(angles[j] - angles[i]) * Math.hypot(tower.R, tower.pitch);
-        roll = -TAU * Math.round(length / (TAU * r)) * t;
-        // Square to the reader at the stops, turning with the road between them: edge on at the column's sides.
-        yaw = roundAt(angle, 1 - smootherStep(clamp(Math.min(t, 1 - t) / .22, 0, 1)));
-        // Round the back of the column: hidden by it, but for whatever shows beside it or over its top.
-        if (Math.cos(angle) < 0) {
-          const left = line.x + tower.cx - tower.R;
-          this.coinClip = { x0: left, x1: left + 2 * tower.R, top: line.y + tower.topY - tower.ry + offset };
+        // A wheel, in its place, holding still but for its mark melting from stop to stop; and while it does, it
+        // breathes: swelling and lifting a touch, its face opening to the reader, rocking, and settling again.
+        ({ x, y, r } = line);
+        tipK = leanK = 1;
+        if (!reducedMotion && state.travel > 0) {
+          const breath = Math.sin(Math.PI * state.travel);
+          r *= 1 + .045 * breath;
+          y -= vh * .014 * breath;
+          tipK = 1 - .11 * breath;
+          roll = .055 * Math.sin(TAU * state.travel) * breath;
         }
-      } else if (state.seg === 'toBench') {
-        const from = stopAt(n - 1);
-        x = mix(from.x, bench.x, e); y = mix(from.y, bench.y, e) - lift(e); r = mix(from.r, bench.r, e);
-      } else ({ x, y, r } = bench);
+      } else {
+        // On to the process: straightening up out of the wheel, face on, as it goes across to its place in the middle of
+        // the room and shrinks to its size there.
+        const to = this.process?.disc ?? line;
+        x = mix(line.x, to.x, e);
+        y = mix(line.y, to.y, e);
+        r = mix(line.r, to.r, e);
+        tipK = leanK = 1 - e;
+      }
       y += offset;
     }
     // In the air between the rope and the card (or crouched to go): the hop has it.
@@ -2008,14 +2351,27 @@ class DotStage {
     coin.position.set(x, -y, 0);
     coin.scale.set(r * sx, r * sy, r);
     this.aboutPose = { x, y, r };
-    // Turned round the upright (yaw, on the tower), then rolled about its own middle.
-    coin.quaternion.setFromAxisAngle(this._yAxis ??= new THREE.Vector3(0, 1, 0), yaw)
-      .multiply((this._roll ??= new THREE.Quaternion()).setFromAxisAngle(this._zAxis ??= new THREE.Vector3(0, 0, 1), roll));
+    // Rolled about its own middle; and through the five years, a wheel seen from the side: tipped, its face turned
+    // down to the right towards the reader, and leaning (WHEEL), so its face is an ellipse rising to the right, as
+    // the page's words do.
+    const zAxis = this._zAxis ??= new THREE.Vector3(0, 0, 1);
+    coin.quaternion.setFromAxisAngle(zAxis, roll);
+    if (tipK || leanK) {
+      const d = Math.PI / 180;
+      const lean = this._lean ??= new THREE.Quaternion(), tip = this._tip ??= new THREE.Quaternion();
+      lean.setFromAxisAngle(zAxis, WHEEL.lean * d * leanK);
+      tip.setFromAxisAngle(this._xAxis ??= new THREE.Vector3(1, 0, 0), WHEEL.tip * d * tipK);
+      coin.quaternion.premultiply(tip).premultiply(lean);
+    }
 
-    // Its faces: what it came off the rope showing, the portrait, each stop's tool, the process. The next comes
-    // onto the side facing away, so no face ever changes in view; while it is tossed, that is the same tool again.
+    // Its faces: the tool the jump off the rope turned up (below), the portrait, each stop's tool, the process. The
+    // next comes onto the side facing away, so no face ever changes in view.
     this.aboutCame ??= this.seal.shown ?? COIN_SKILLS[0];
-    const list = this.aboutList = aboutFaces(this.aboutCame, PORTRAIT, about.faces, MONOGRAM);
+    this.aboutTurned ??= reducedMotion ? this.aboutCame : this.otherTool(this.aboutCame);
+    const list = this.aboutList = aboutFaces(this.aboutTurned, PORTRAIT, MINE);
+    // The five years' face: the mark of the stop the coin is at, melting into the next's as the reader goes on.
+    const stopAt = Math.min(n - 1, state.stop), melt = state.seg === 'line' ? state.melt : 0;
+    this.aboutMorph = { from: about.faces[stopAt], to: about.faces[Math.min(n - 1, stopAt + 1)], t: reducedMotion ? Math.round(melt) : melt };
     // On the card, once it has turned over to the portrait, it is the reader's to spin (stepHand): its two sides
     // are the two sides of Saad, his face in code (the engineer) and his face in polygons (the artist).
     const inHand = state.seg === 'card' && state.flips >= 1 - 1e-3 && !hopped;
@@ -2024,25 +2380,60 @@ class DotStage {
     const base = this.flip.angle, at = Math.floor(turned + 1e-6);
     const face = i => (inHand ? (mod(i - 1, 2) === 0 ? PORTRAIT : MESH) : list[clamp(i, 0, list.length - 1)]);
     const front = Math.round(base / Math.PI) + at;
-    this.paintFace(this.faces[mod(front, 2)], face(at));
-    this.paintFace(this.faces[mod(front + 1, 2)], state.seg === 'jump' || hopped ? face(at) : face(at + 1));
-    this.faces.forEach(side => { side.material.uniforms.uMarkOpacity.value = 1; });
+    if (hopped && turned < 1e-3) {
+      // Tossed between the rope and the card, it turns up another tool, as a toss on the rope does: over into the
+      // about, from the one it stood on the rope showing to another; and back onto the rope, to its tag's own again.
+      // It goes end over end once, so its other side is seen on the way: that side takes the tool it is going to
+      // (set the other way up, to be seen the right way up), and then, turned away in its turn, so does the first.
+      const back = this.hop.heading === 'rope', to = back ? this.aboutCame : this.aboutTurned;
+      const marks = this.hopMarks ??= [back ? this.aboutTurned : this.aboutCame, to];
+      marks[Math.cos(TAU * ABOUT_COIN.turns * leap) > 0 ? 1 : 0] = to;
+      marks.forEach((tool, side) => {
+        const mesh = this.faces[mod(front + side, 2)];
+        this.paintFace(mesh, tool);
+        mesh.rotation.z = side ? Math.PI : 0;
+      });
+    } else {
+      this.hopMarks = null;
+      this.faces.forEach(mesh => { mesh.rotation.z = 0; });
+      this.paintFace(this.faces[mod(front, 2)], face(at));
+      this.paintFace(this.faces[mod(front + 1, 2)], state.seg === 'jump' || hopped ? face(at) : face(at + 1));
+    }
+    this.faces.forEach(side => {
+      side.material.uniforms.uMarkOpacity.value = 1;
+      side.material.uniforms.uGlint.value = 0;
+    });
     this.spinner.rotation.y = base + Math.PI * turned;
-    this.showSketch(face(Math.round(turned)));
+    // On to the process: the last stop's mark fades off its face, and then it starts saying how a project goes. (Once
+    // it has arrived, the process has what it says: stepProcess.)
+    if (state.markOut > 0 && state.p < 1) {
+      const u = this.faces[mod(front, 2)].material.uniforms, says = wordTurn(state.m, reducedMotion);
+      u.uMarkOpacity.value = says ? 1 : 1 - state.markOut;
+      if (says) {
+        u.uMode.value = 0;
+        u.uMask.value = this.coinSays(state.m);
+        u.uWipe.value = 1;
+      }
+    }
     this.stepAscii(dt, inHand, card);
     // Which of his sides is up (null off the card), for the words under it to follow.
     const up = inHand ? face(Math.round(turned)) : null;
     if (up !== this.sideUp) { this.sideUp = up; about.onSide?.(up === PORTRAIT ? 'engineer' : up === MESH ? 'artist' : null); }
 
-    // The reviews' ring round it: opening out from behind it once it has landed on the card, and folding back into
-    // it as it leaves (for the tower, or back up to the rope), wherever it is.
+    // The reviews' ring round it: opening out from behind it once it has landed on the card and turned over to him, and folding back into
+    // it as it leaves (for the five years, or back up to the rope), wherever it is.
     if (this.ring) {
       const scrolled = scroll - (this.ringScroll ?? scroll);
       this.ringScroll = scroll;
-      const want = this.hop.phase === 'card' && (state.seg === 'jump' || state.seg === 'card' || state.seg === 'toLine') ? 1 : 0;
-      this.ringOpen = reducedMotion ? want : this.ringOpen + (want - this.ringOpen) * (1 - Math.exp(-dt * (want ? 2.6 : 5)));
-      // (Folding as the scroll takes the coin down to the tower, in step with it.)
-      const leaving = state.seg === 'toLine' ? smootherStep(clamp(e / .6, 0, 1)) : 0;
+      // (Not until the coin has turned over to him: while it still shows the tool it came off the rope with, no ring.
+      // Once it has, it stays open as he turns between his two sides, and folds away as the coin leaves the card.)
+      const shown = (state.seg === 'card' && state.flips >= 1 - 1e-3) || state.seg === 'toLine';
+      const want = this.hop.phase === 'card' && shown ? 1 : 0;
+      // (Opening eases in; shutting is over in a moment, at a steady pace, with no long tail left round a coin already gone.)
+      this.ringOpen = reducedMotion ? want
+        : want ? this.ringOpen + (1 - this.ringOpen) * (1 - Math.exp(-dt * RING_GO.open)) : Math.max(0, this.ringOpen - dt / RING_GO.shut);
+      // (Folding with the scroll over FOLD, the coin held still on the card, so it has gone before the coin moves at all.)
+      const leaving = smootherStep(clamp((q - ABOUT_SCROLL.CARD) / (ABOUT_SCROLL.FOLD * RING_GO.done), 0, 1));
       const open = this.ringOpen * (1 - leaving);
       if (narrowScreen.matches || open < .001) this.ring.hide();
       else this.ring.place({
@@ -2051,20 +2442,16 @@ class DotStage {
       });
     }
 
-    // At rest (on the card, on the bench) it sways a little by itself and leans toward the pointer.
+    // At rest on the card it sways a little by itself and leans toward the pointer.
     const tilt = this.aboutTilt, ease = 1 - Math.exp(-dt * 4);
-    const resting = !reducedMotion && (state.seg === 'card' || state.seg === 'bench') ? 1 : 0;
+    const resting = !reducedMotion && state.seg === 'card' ? 1 : 0;
     tilt.rest += (resting - tilt.rest) * (1 - Math.exp(-dt * 2.5));
     const W = this.viewW || window.innerWidth;
     tilt.y += (clamp((this.pointer.x - x) / (W * .4), -1, 1) * ABOUT_COIN.tilt * tilt.rest - tilt.y) * ease;
     tilt.x += (clamp((this.pointer.y - y) / (vh * .4), -1, 1) * ABOUT_COIN.tilt * tilt.rest - tilt.x) * ease;
     const t = performance.now() / 1000 * ABOUT_COIN.swaySpeed;
     const sway = ABOUT_COIN.sway * tilt.rest;
-    this.aligner.rotation.set(
-      TAU * ABOUT_COIN.turns * leap + tilt.x + sway * Math.sin(t * 1.3 + .5) * .6,
-      tilt.y + sway * Math.sin(t),
-      0,
-    );
+    this.aligner.rotation.set(TAU * ABOUT_COIN.turns * leap + tilt.x + sway * Math.sin(t * 1.3 + .5) * .6, tilt.y + sway * Math.sin(t), 0);
     return true;
   }
 
@@ -2086,14 +2473,15 @@ class DotStage {
     // else is gliding it already).
     const other = gliding(), ours = other === 'hop', take = !reducedMotion && !other;
     if ((was === 'rope' || was === 'down') && (enter >= 1 || (enter > .02 && moved > 0 && !ours))) {
-      Object.assign(hop, { phase: 'up', t: was === 'down' ? 1 - hop.t : 0, launch: null, page: enter < 1 && take ? about.top : null });
+      Object.assign(hop, { phase: 'up', heading: 'card', t: was === 'down' ? 1 - hop.t : 0, launch: null, page: enter < 1 && take ? about.top : null });
     } else if ((was === 'up' || was === 'card') && (enter <= 0 || (enter < .98 && moved < 0 && !ours))) {
       // From where it was last drawn (kept on the screen: its place on the card may be scrolled away below already).
       const last = this.aboutPose ?? target, start = { x: last.x, y: Math.min(last.y, vh - last.r * .6), r: last.r };
-      Object.assign(hop, { phase: 'down', t: was === 'up' ? 1 - hop.t : 0, start, launch: null, page: enter > 0 && take ? about.top - about.vh : null });
+      Object.assign(hop, { phase: 'down', heading: 'rope', t: was === 'up' ? 1 - hop.t : 0, start, launch: null, page: enter > 0 && take ? about.top - about.vh : null });
     }
     if (reducedMotion && hop.phase !== 'rope' && hop.phase !== 'card') hop.phase = hop.phase === 'up' ? 'card' : 'rope';
     const { phase } = hop;
+    if (COIN_LOG && was !== phase) coinLog('hop', phase, `the coin ${was} → ${phase} (about enter ${enter.toFixed(3)}, scrolled ${moved.toFixed(0)}px)`);
     this.ropeAway = phase === 'rope' ? 0 : 1;
     if (phase === 'rope' || phase === 'card') return null;
     const t = hop.t = Math.min(1, hop.t + dt / HOP.time);
@@ -2159,33 +2547,42 @@ class DotStage {
         pose.leap = -pose.leap;
       }
       this.ropeAway = 1 - smootherStep(clamp(t / .5, 0, 1));
-      if (t >= 1) hop.phase = 'rope';
+      // (Down on the rope: it has the coin's weight, for the tour to take up from, startRope.)
+      if (t >= 1) { hop.phase = 'rope'; this.walk.dip = TIGHTROPE.weight; }
     }
     return pose;
   }
 
   /**
    * The coin in the reader's hand on the card (components/about tells the
-   * stage what the hand does: coinGrab, coinTurn, coinLet). Held, it turns as
-   * far as the hand moves; let go, it spins on as fast as it was flicked,
-   * slowing, and settles on whichever face is nearest, the portrait or a tool.
-   * Off the card (`inHand` false, or the scroll taking it on: `e` near the
-   * card's end), it turns home to the portrait, so what follows begins as it
-   * always does. Returns how far it is turned by hand (rad, a whole number of
-   * turns once it is home, which is no turn at all).
+   * stage what the hand does: coinGrab, coinTurn, coinLet, coinTap). Held, it
+   * turns as far as the hand moves; let go, it goes to the face the hand left
+   * it for (`target`: his other side, or back as it was), by a spring. Left
+   * alone, it turns over by itself every so often (HAND every), from one of his
+   * sides to the other, the words under it following; not while the pointer is
+   * on it, looking through it at him. Off the card (`inHand` false, or the
+   * scroll taking it on: `e` near the card's end), it turns home to the
+   * portrait, so what follows begins as it always does. Returns how far it is
+   * turned by hand (rad, a whole number of turns once it is home, which is no
+   * turn at all).
    */
   stepHand(dt, inHand, e) {
     const hand = this.coinHand;
     if (hand.held && inHand) return hand.angle;
     hand.held = false;
     const settling = inHand && e < .9;
-    if (settling && Math.abs(hand.spin) > HAND.settle) {
-      hand.spin *= Math.exp(-HAND.friction * dt);
-      hand.angle += hand.spin * dt;
-      return hand.angle;
+    // Home to the portrait (a whole turn), off the card; on it, the face it was left for (or the nearest).
+    if (!settling) { hand.target = Math.round(hand.angle / TAU) * TAU; hand.rest = 0; }
+    hand.target ??= Math.round(hand.angle / Math.PI) * Math.PI;
+    if (settling && !reducedMotion && !hand.over) {
+      hand.rest += dt;
+      if (hand.rest >= HAND.every) {
+        hand.rest = 0;
+        hand.target += Math.PI;
+        hand.spin += HAND.tap * .6;
+      }
     }
-    // Onto the nearest face (a half-turn), or home to the portrait (a whole one), by a spring.
-    const unit = settling ? Math.PI : TAU, target = Math.round(hand.angle / unit) * unit;
+    const target = hand.target;
     const [w, z] = HAND.spring, steps = Math.max(1, Math.ceil(dt * 240)), h = dt / steps;
     for (let i = 0; i < steps; i++) {
       hand.spin += (w * w * (target - hand.angle) - 2 * z * w * hand.spin) * h;
@@ -2195,60 +2592,66 @@ class DotStage {
       hand.spin = 0;
       hand.angle = target;
       // Settled on the portrait: a whole number of turns is no turn (on a tool, the turns say which tool, so they stay).
-      if (Math.abs(mod(target + Math.PI, TAU) - Math.PI) < 1e-6) hand.angle = 0;
+      if (Math.abs(mod(target + Math.PI, TAU) - Math.PI) < 1e-6) hand.angle = hand.target = 0;
     }
     return hand.angle;
   }
 
-  /** components/about: the hand takes hold of the coin on the card. */
+  /** components/about: the hand takes hold of the coin on the card (on the face it was on, or on its way to). */
   coinGrab() {
-    Object.assign(this.coinHand, { held: true, spin: 0 });
+    const hand = this.coinHand;
+    hand.from = hand.target ?? Math.round(hand.angle / Math.PI) * Math.PI;
+    Object.assign(hand, { held: true, spin: 0 });
     this.renderUntil = performance.now() + 100;
   }
 
-  /** The hand has moved `px` across it, holding it: it turns with it. */
+  /** The hand has moved `px` across it, holding it: it turns with it, as far as a little past his other side. */
   coinTurn(px) {
-    if (!this.coinHand.held) return;
-    this.coinHand.angle += px * HAND.perPx;
+    const hand = this.coinHand;
+    if (!hand.held) return;
+    const most = HAND.most * Math.PI;
+    hand.angle = hand.from + clamp(hand.angle + px * HAND.perPx - hand.from, -most, most);
     this.renderUntil = performance.now() + 100;
   }
 
-  /** Let go, the hand moving at `pxPerSecond`: it spins on. */
+  /**
+   * Let go, the hand moving at `pxPerSecond`: turned far enough, or flicked, it goes over to his other side, the
+   * way it was going, once (never spinning on round to the side it began on); else back as it was.
+   */
   coinLet(pxPerSecond) {
     const hand = this.coinHand;
     if (!hand.held) return;
     hand.held = false;
-    hand.spin = clamp(pxPerSecond * HAND.perPx, -HAND.fastest, HAND.fastest);
+    const moved = hand.angle - hand.from, spin = clamp(pxPerSecond * HAND.perPx, -HAND.fastest, HAND.fastest);
+    const way = Math.abs(moved) > HAND.flip ? Math.sign(moved) : Math.abs(spin) > HAND.flick ? Math.sign(spin) : 0;
+    hand.target = hand.from + way * Math.PI;
+    hand.spin = way && Math.sign(spin) !== way ? 0 : spin;
+    hand.rest = HAND.every - HAND.after;
   }
 
-  /** The pointer over the coin on the card: `at` across its face ({ u, v }, 0 → 1, v up), or null when it is not. */
+  /** The pointer over the coin on the card (`at`), or not (null): while it is, the coin waits to turn over by itself. */
   coinPoint(at) {
-    const hand = this.coinHand;
-    hand.over = Boolean(at);
-    if (at) { hand.u = at.u; hand.v = at.v; }
+    this.coinHand.over = Boolean(at);
   }
 
-  /** A tap on the coin: it turns over to his other side (a flick of a half-turn, settled by stepHand). */
+  /** A tap on the coin: it turns over to his other side (a flick, settled there by stepHand). */
   coinTap() {
     const hand = this.coinHand;
     hand.held = false;
+    hand.target = (hand.target ?? Math.round(hand.angle / Math.PI) * Math.PI) + Math.PI;
     hand.spin = HAND.tap;
+    hand.rest = HAND.every - HAND.after;
   }
 
   /**
-   * The portrait's live part, this frame: the lens where the pointer is over
-   * the coin on the card (eased in and out), the clock its churning edge runs
-   * on, and how many characters across the
-   * face is, for the coin's size there (about 10px a character: big enough to be read as type, not as dots).
+   * The faces' live part, this frame: the clock (the melting marks run on it), and how many characters across his
+   * face in code is, for the coin's size on the card (about 7px a character: fine enough for his picture to be exact,
+   * still big enough to be seen as type).
    */
   stepAscii(dt, inHand, card) {
-    const hand = this.coinHand, now = performance.now();
-    hand.hover += ((inHand && hand.over && !reducedMotion ? 1 : 0) - hand.hover) * (1 - Math.exp(-dt * 6));
-    const cells = clamp(Math.round(card.r * 2 / 10.5), 22, 40);
+    const now = performance.now(), cells = clamp(Math.round(card.r * 2 / 7), 34, 64);
     for (const face of this.faces) {
       const u = face.material.uniforms;
-      u.uHover.value = hand.hover;
-      u.uPointer.value.set(hand.u, hand.v);
       u.uTime.value = now / 1000;
       u.uCells.value = cells;
     }
@@ -2276,6 +2679,28 @@ class DotStage {
     this.handleResize();
     hero?.handleResize?.();
     this.renderUntil = performance.now() + 200;
+  }
+
+  /**
+   * Console (coinLog 'stage'): where the coin is in its journey, and the mark on
+   * each side as it turns. Only logged when one of them changes.
+   */
+  logCoin(flipTarget, sides) {
+    const phase = this.coinPhase();
+    const names = [0, 1].map(side => sides[side] ?? '-');
+    coinLog('stage', `${phase}|${names.join('|')}`,
+      `${phase} at k ${this.k.toFixed(3)}: side 0 shows ${names[0]}, side 1 shows ${names[1]} (turned ${(flipTarget / Math.PI).toFixed(3)} half-turns)`);
+  }
+
+  /** The coin's stage in its journey, by the scroll (k), for logCoin. */
+  coinPhase() {
+    const k = this.k;
+    if (k < CENTRE.reach) return 'flying from the i to the middle';
+    if (k < CENTRE.settle) return 'settling in the middle';
+    if (k < STICK[1]) return 'sticking to the book';
+    if (k < 2) return 'lying on the book';
+    if (k < ROW.lift[1]) return 'flicked off the book';
+    return this.balancing() ? 'on the rope' : 'in the row';
   }
 
   tick(time, deltaMs) {
@@ -2366,61 +2791,78 @@ class DotStage {
     const turn = this.turn, seal = this.seal;
     const wrap = (i, n) => ((i % n) + n) % n;
     let flipTarget;
+    /** The coin is on the rope this frame (its tour has its faces). */
+    let onRope = false;
     const sides = [];
+    // Off the rope (scrolled back toward the book, or jumping into the about), its tour is over.
+    if (this.tour && !this.balancing()) this.leaveRope();
+    // (Back on the book, it has no place on the rope to go back to: it lands at the first tag again.)
+    if (this.k < OPEN.at) this.seat = null;
     if (this.k < 1) {
-      const tools = this.coinTools();
       flipTarget = turn.start + (turn.land - turn.start) * this.pose.yaw / Math.PI;
+      // Still on the i, the dot shows the skills (SkillCoin, skillSpin.js), whatever project the stage has on show
+      // (`active` is 0 from the first mount, so it is never "none"). The coin keeps that sequence and lands on the
+      // skill the dot was showing, so its marks match the hero's, with no repeat where it lands.
       const landing = Math.round(turn.land / Math.PI);
-      // With no project on show it lands on the next skill in the sequence;
-      // scrolling back up out of the work, it lands where it was.
-      if (selected < 0) seal.shown = COIN_SKILLS[wrap(landing, COIN_SKILLS.length)];
-      seal.shown ??= tools[0];
-      Object.assign(seal, { project: selected, index: Math.max(0, tools.indexOf(seal.shown)), hold: 0, turns: 0, progress: 0, flip: null });
-      const mark = i => (i === landing ? seal.shown : COIN_SKILLS[wrap(i, COIN_SKILLS.length)]);
+      const skill = i => COIN_SKILLS[wrap(i, COIN_SKILLS.length)];
+      seal.shown = skill(landing);
+      Object.assign(seal, { project: -1, index: wrap(landing, COIN_SKILLS.length), hold: 0, turns: 0, progress: 0, flip: null });
       const n = Math.floor(flipTarget / Math.PI + 1e-6);
-      sides[wrap(n, 2)] = mark(n);
-      sides[wrap(n + 1, 2)] = mark(n + 1);
+      sides[wrap(n, 2)] = skill(n);
+      sides[wrap(n + 1, 2)] = skill(n + 1);
       // Sticking to the cover it turns over to its other face, the monogram (it has landed on its face by then).
       if (this.pose.onBook) sides[1 - wrap(landing, 2)] = MONOGRAM;
     } else {
       // Off the i it faces the reader, the first of the row: it turns over only with the row, to a new project's first tool.
       const state = rowState[0];
-      // On the rope it turns to each of the project's tools in turn, by itself.
-      const balancing = this.balancing();
-      // Landing on the cover it turns over to its other face, the monogram, and turns back as it lifts off.
-      flipTarget = turn.land + (state?.turn ?? 0);
+      // On the rope it is tossed to each of the project's tools in turn, by itself.
+      const balancing = this.balancing(), roped = Boolean(this.work.rope);
+      // With a rope to go to it does not turn with the row: it shows the tool it left the rope showing (the first
+      // of the project's, before it has been on it), and the tour turns it over from there.
+      flipTarget = turn.land + (roped ? 0 : state?.turn ?? 0);
       const facing = wrap(Math.round(turn.land / Math.PI), 2);
-      sides[facing] = state?.front ?? seal.shown;
+      const front = roped ? this.seat?.tool ?? this.coinTools()[0] : state?.front ?? seal.shown;
+      sides[facing] = front;
       // Its other face is the monogram while it is on the book (it lands on it and lies monogram up).
-      sides[1 - facing] = this.pose.onBook ? MONOGRAM : state?.back ?? seal.shown;
-      if (state) seal.shown = state.front;
+      sides[1 - facing] = this.pose.onBook ? MONOGRAM : roped ? front : state?.back ?? seal.shown;
+      if (roped || state) seal.shown = front;
       if (state && state.size < 1 && !balancing) this.coin.scale.setScalar(dot.r * Math.max(.001, state.size));
       if (balancing) {
-        const tools = this.coinTools();
+        onRope = true;
+        const want = this.tourWant();
+        // (With reduced motion nothing is tossed: another project's first tool is simply there.)
+        if (reducedMotion && this.tour && this.tour.project !== want.project) { this.leaveRope(); this.seat = null; }
+        const tour = this.tour ??= this.startRope(this.seat?.tool ?? this.coinTools()[0]);
         // By the clock, not the frame: the same pace on a slow screen as a fast one.
-        const now = performance.now();
-        const cycle = this.cycle ??= { t: 0, n: 0, project: selected, at: now };
-        if (cycle.project !== selected) Object.assign(cycle, { t: 0, n: 0, project: selected });
-        cycle.t += reducedMotion ? 0 : Math.min(.25, (now - cycle.at) / 1000);
-        cycle.at = now;
-        // Standing at a tool's tag (hold), then walking on to the next one's (walk), turning over to it as it goes:
-        // along the rope and back again (pace).
-        const period = TIGHTROPE.hold + TIGHTROPE.walk;
-        while (cycle.t >= period) { cycle.t -= period; cycle.n++; }
-        const f = tools.length > 1 ? smootherStep(clamp((cycle.t - TIGHTROPE.hold) / TIGHTROPE.walk, 0, 1)) : 0;
-        const n = tools.length > 1 ? cycle.n : 0;
-        cycle.f = f;
-        const landing = Math.round(turn.land / Math.PI);
-        flipTarget = turn.land + Math.PI * (n + f);
-        sides[wrap(landing + n, 2)] = tools[pace(n, tools.length)];
-        sides[wrap(landing + n + 1, 2)] = tools[pace(n + 1, tools.length)];
-        seal.shown = tools[pace(f > .5 ? n + 1 : n, tools.length)];
+        const now = performance.now(), line = this.ropeLine();
+        const elapsed = reducedMotion ? 0 : Math.min(.25, (now - tour.clock) / 1000);
+        tour.clock = now;
+        const event = stepTour(tour, elapsed, want, { r: dot.r, span: line.x1 - line.x0, droop: this.walk.droop, weight: TIGHTROPE.weight });
+        if (COIN_LOG && event) {
+          coinLog('rope', `${event}|${now}`, event === 'land'
+            ? `lands on ${tour.lit} (tag ${tour.at + 1} of ${tour.tools.length}, project ${tour.project})${tour.done ? ': the tour is done' : ''}`
+            : event === 'toss' ? `tossed to ${tour.tools[tour.toss.to]}${tour.toss.high ? ', high: another project' : ''}`
+              : event === 'spin' ? `spun where it stands: ${tourShown(tour)} again` : `rolls along to ${tourShown(tour)} again`);
+        }
+        // Its two sides, as the tour has them: the one it came onto the rope on, and the other.
+        sides[tour.base] = tour.marks[0];
+        sides[1 - tour.base] = tour.marks[1];
+        seal.shown = tourShown(tour);
         need = true;
-      } else this.cycle = null;
-      const shown = balancing ? seal.shown : null;
+      }
+      const shown = balancing ? this.tour.lit : null;
       if (shown !== this.toolShown) { this.toolShown = shown; this.onTool?.(shown); }
     }
-    sides.forEach((tool, side) => this.paintFace(this.faces[side], tool));
+    if (COIN_LOG) this.logCoin(flipTarget, sides);
+    // On the rope a side only takes a new mark while it is turned away. Off it (the book open, the coin on its way
+    // to the rope), a mark changing on the side in view is printed on from the middle out, never swapped. (Not in the
+    // about: there its faces are the about's, stepAbout.)
+    const inView = wrap(Math.round(flipTarget / Math.PI), 2), printed = !onRope && !this.aboutOn && this.k >= OPEN.at;
+    sides.forEach((tool, side) => this.paintFace(this.faces[side], tool, printed && side === inView));
+    for (const face of this.faces) {
+      const u = face.material.uniforms;
+      if (u.uWipe.value < 1) { u.uWipe.value = Math.min(1, u.uWipe.value + dt / WIPE.time); need = true; }
+    }
     for (const face of this.faces) face.material.uniforms.uMarkOpacity.value = this.heroSkill ? 1 : this.pose.mark;
     // It leaves at the angle the reader was seeing the dot from, and straightens as it lifts.
     const seen = reducedMotion ? 0 : 1 - smootherStep(clamp(this.k / .45, 0, 1));
@@ -2454,10 +2896,7 @@ class DotStage {
       this.coinSeated = false;
       if (this.balancing()) { this.balance(dt, scroll); need = true; }
     }
-    if (!this.balancing()) {
-      this.balanceIn = 0;
-      if (this.restRope()) need = true;
-    }
+    if (!this.balancing() && this.restRope()) need = true;
     // The rope where the coin is now standing on it, and the tags hanging from it with it.
     if (this.ropebar?.placeLine(scroll)) need = true;
     this.reportRope();
@@ -2468,6 +2907,10 @@ class DotStage {
     for (const face of this.faces) face.material.polygonOffsetFactor = factor;
     // In the about, the coin is its own (stepAbout), whatever the journey made of it above.
     if (this.stepAbout(dt, scroll)) need = true;
+    // After it, the process: the coin taken apart and put back together (stepProcess).
+    if (this.stepProcess(dt, scroll)) need = true;
+    // After the process's pinned screen, the coin becomes the ring threaded through the band of words (stepBand).
+    if (this.stepBand(scroll)) need = true;
     // In the contact, the coin is the letter's seal (stepContact), wherever its stand-in on the page is.
     if (this.stepContact(dt)) need = true;
 

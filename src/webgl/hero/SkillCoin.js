@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { reducedMotion } from '../../brand/motion.js';
 import { skillSpinPose, skillFaces } from './skillSpin.js';
 import { markCanvas, isDark, COIN_SKILLS as SKILLS } from '../coinMarks.js';
+import { coinLog } from '../coinLog.js';
 
 const smooth = t => t * t * (3 - 2 * t);
 
@@ -61,7 +62,9 @@ export default class SkillCoin {
     const opacity = smooth(Math.min(1, Math.max(0, (progress - .7) / .24)));
     const pose = skillSpinPose(this.elapsed, this.marks.length);
     this.rotor.rotation.y = pose.angle;
-    skillFaces(pose.angle, this.marks.length).forEach((skill, side) => this.show(this.faces[side], this.marks[skill].name, opacity));
+    const skills = skillFaces(pose.angle, this.marks.length);
+    skills.forEach((skill, side) => this.show(this.faces[side], this.marks[skill].name, opacity));
+    this.logTurn(pose, skills);
     const faceDepth = liquid.complete ? this.thickness : liquid.bulb.scale.z;
     this.faces.forEach((face, side) => { face.position.z = (side ? -1 : 1) * (faceDepth + .04); });
   }
@@ -85,6 +88,14 @@ export default class SkillCoin {
     face.material.opacity = opacity;
     const map = this.texture(name);
     if (face.material.map !== map) { face.material.map = map; face.material.needsUpdate = true; }
+  }
+
+  /** Console: whether the hero's coin is holding or turning, and the mark each side wears (coinLog 'hero'). */
+  logTurn(pose, skills) {
+    const half = pose.angle / Math.PI, turning = Math.abs(half - Math.round(half)) > 1e-4;
+    const names = skills.map(skill => this.marks[skill].name);
+    coinLog('hero', `${pose.step}|${turning}|${names.join('|')}`,
+      `${turning ? 'turning' : 'holding'} at half-turn ${half.toFixed(3)}: side 0 shows ${names[0]}, side 1 shows ${names[1]}`);
   }
 
   /**

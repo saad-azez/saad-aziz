@@ -20,6 +20,7 @@ import angular from '../assets/logos/brand/angular.svg';
 import monogramLetters from '../assets/monogram-letters.svg';
 import monogramRing from '../assets/monogram-ring.svg';
 import portrait from '../assets/portrait.jpeg';
+import { coinLog } from './coinLog.js';
 
 /**
  * The tools the coin turns through in the hero, in the order the hero's copy
@@ -36,16 +37,18 @@ export const MONOGRAM = 'Monogram';
 const MONOGRAM_GOLD = '#c9a15a';
 /**
  * The coin's other side, turned up in the About: Saad himself, as the head on
- * a real coin is a portrait, set in type: ASCII, the heavier a character the
- * darker (or, on a dark coin, the lighter) that part of the picture. It is not
- * a picture painted once but drawn by the coin's own shader every frame
- * (DotStage FACE_FRAGMENT), from the portrait's light (portraitField) and the
- * characters (asciiAtlas), so it can answer the pointer.
+ * a real coin is a portrait, set in type: characters each the colour of his
+ * photograph where it stands, the heavier the lighter (or, on a light coin,
+ * the darker) that part of it, over the photograph itself, so it is his
+ * picture exactly. Drawn by the coin's own shader every frame (DotStage
+ * FACE_FRAGMENT), from his photograph (portraitPhoto) and the characters
+ * (asciiAtlas).
  */
 export const PORTRAIT = 'Portrait';
 /**
- * And the face again, as a 3D artist would make it: a low-poly mesh, facets of
- * flat light and the wire of their edges, drawn by the shader too. The coin's
+ * And the face again, as a 3D artist would make it: a low-poly mesh, each
+ * facet flat and the colour of his photograph at its middle, the wire of
+ * their edges faint over them, drawn by the shader too. The coin's
  * two sides on the About's card are these two: the engineer (the face in code)
  * and the artist (the face in polygons).
  */
@@ -129,13 +132,11 @@ function paintName(context, tool, onDark) {
 }
 
 /**
- * The face, cut out of the portrait (1024 × 1536) as a square: hair to collar,
+ * The face, cut out of the portrait (960 × 1280) as a square: hair to collar,
  * the face filling most of it. As fractions: the square's side and its left of
  * the photo's width, its top of the photo's height.
  */
-const CROP = { side: .42, x: .294, y: .232 };
-/** In the crop (0 → 1 across and down): the head (its middle, and how far either way), and where the shoulders start. */
-const HEAD = { x: .5, y: .38, rx: .26, ry: .33, shoulders: .66 };
+const CROP = { side: .525, x: .215, y: .216 };
 /** The face, drawn into a square `S` px canvas, as the coin shows it: inside a circle a little short of its edge. */
 const drawFace = (context, image, S) => {
   const side = image.naturalWidth * CROP.side, inner = S * .44;
@@ -162,56 +163,71 @@ const once = (make) => {
 };
 
 /**
- * The face as the coin's faces read it (the ASCII, and the mesh): a 256²
- * canvas whose red is the face's light and whose green is the sitter (his
- * head, his shoulders), so the wall behind him is no part of it. The light is
- * drawn out for a few dozen characters across: sharpened against a blur of
- * itself (an unsharp mask), so the eyes, the brows and the line of the jaw
- * carry, and stretched to the face's own darkest and lightest. `ready` is
- * called once it is drawn (straight away, if it already is).
+ * Him, in colour, 512², cut out of the wall behind him: what both of the coin's faces of him are made from, each
+ * point of them his own colour there. The wall is far more saturated than he is (orange wood; a grey suit, a white
+ * shirt, skin, dark hair), so he is what is not; his face and neck, nearer the wood's colour in places, are kept by
+ * the shape of them (CUT, in the crop's own square, 0 → 1). Then closed over its small gaps, its holes filled, and
+ * its edge softened a touch. The cut is the alpha.
+ *
+ *   saturation, dark   what is him: less saturated than this, or darker than that
+ *   face, neck         kept whatever their colour: an egg (its middle, how far either way, and how much narrower it
+ *                      grows to the chin), and a box (its middle across, how far either way, and from and to down)
  */
-export const portraitField = once((canvas, image) => {
-  const S = 256, c = S / 2;
+const CUT = { saturation: .58, dark: .28, face: [.5, .42, .165, .26, .5], neck: [.5, .1, .6, .76] };
+export const portraitPhoto = once((canvas, image) => {
+  const S = 512, c = S / 2;
   canvas.width = canvas.height = S;
   const context = canvas.getContext('2d', { willReadFrequently: true });
   const inner = drawFace(context, image, S);
-  const pixels = context.getImageData(0, 0, S, S);
-  const p = pixels.data;
-  const step = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
-  const lum = new Float32Array(S * S), sitter = new Float32Array(S * S), face = new Uint8Array(S * S);
+  const pixels = context.getImageData(0, 0, S, S), p = pixels.data;
+  let him = new Uint8Array(S * S);
+  const [fx, fy, frx, fry, chin] = CUT.face, [nx, nw, n0, n1] = CUT.neck;
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const i = y * S + x, k = i * 4;
-    lum[i] = (.2126 * p[k] + .7152 * p[k + 1] + .0722 * p[k + 2]) / 255;
-    // (Through the crop's own square, which fills the circle: `u`, `v` across and down it.)
+    const i = y * S + x, k = i * 4, r = p[k] / 255, g = p[k + 1] / 255, b = p[k + 2] / 255;
+    const top = Math.max(r, g, b), saturation = top ? (top - Math.min(r, g, b)) / top : 0;
     const u = (x - (c - inner)) / (inner * 2), v = (y - (c - inner)) / (inner * 2);
-    const head = Math.hypot((u - HEAD.x) / HEAD.rx, (v - HEAD.y) / HEAD.ry);
-    const shoulders = step(HEAD.shoulders, HEAD.shoulders + .05, v) * step(-.02, .02, .2 + (v - HEAD.shoulders) * 1.5 - Math.abs(u - .5));
-    sitter[i] = Math.max(1 - step(.88, 1.05, head), shoulders) * (Math.hypot(x - c, y - c) < inner ? 1 : 0);
-    face[i] = head < .75 ? 1 : 0;
+    const across = frx * (1 - chin * Math.max(0, (v - fy) / fry));
+    const kept = Math.hypot((u - fx) / across, (v - fy) / fry) < 1 || (Math.abs(u - nx) < nw && v > n0 && v < n1);
+    him[i] = (saturation < CUT.saturation || top < CUT.dark || kept) && Math.hypot(x - c, y - c) < inner ? 1 : 0;
   }
-  const blur = new Float32Array(S * S), R = 4;
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    let sum = 0, n = 0;
-    for (let dy = -R; dy <= R; dy += 2) for (let dx = -R; dx <= R; dx += 2) {
-      sum += lum[Math.min(S - 1, Math.max(0, y + dy)) * S + Math.min(S - 1, Math.max(0, x + dx))]; n++;
+  // Grown and shrunk again (`by` px, a square at a time): closing its small gaps, or (the other way) opening away specks.
+  const spread = (grid, by, value) => {
+    let out = grid;
+    for (const across of [true, false]) {
+      const next = new Uint8Array(S * S);
+      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+        let hit = 1 - value;
+        for (let d = -by; d <= by && hit !== value; d++) {
+          const xx = across ? x + d : x, yy = across ? y : y + d;
+          if (xx >= 0 && xx < S && yy >= 0 && yy < S && out[yy * S + xx] === value) hit = value;
+        }
+        next[y * S + x] = hit;
+      }
+      out = next;
     }
-    blur[y * S + x] = sum / n;
+    return out;
+  };
+  him = spread(spread(him, 6, 1), 6, 0);
+  him = spread(spread(him, 2, 0), 2, 1);
+  // Its holes filled: whatever of the wall cannot be reached from the edge is him.
+  const wall = new Uint8Array(S * S), queue = [];
+  for (let i = 0; i < S; i++) for (const at of [i, (S - 1) * S + i, i * S, i * S + S - 1]) if (!him[at] && !wall[at]) { wall[at] = 1; queue.push(at); }
+  while (queue.length) {
+    const at = queue.pop(), x = at % S, y = (at / S) | 0;
+    for (const next of [x > 0 ? at - 1 : -1, x < S - 1 ? at + 1 : -1, y > 0 ? at - S : -1, y < S - 1 ? at + S : -1]) {
+      if (next >= 0 && !him[next] && !wall[next]) { wall[next] = 1; queue.push(next); }
+    }
   }
-  const sharp = lum.map((v, i) => v + (v - blur[i]) * 1.8);
-  // Stretched to the face's own range (not the suit's, which would leave the face one flat tone).
-  const inside = [...sharp.filter((_, i) => face[i])].sort((a, b) => a - b);
-  const lo = inside[Math.floor(inside.length * .03)] ?? 0, hi = inside[Math.floor(inside.length * .97)] ?? 1;
-  for (let i = 0; i < S * S; i++) {
-    const v = Math.min(1, Math.max(0, (sharp[i] - lo) / Math.max(.05, hi - lo)));
-    p[i * 4] = v * 255; p[i * 4 + 1] = sitter[i] * 255; p[i * 4 + 2] = 0; p[i * 4 + 3] = 255;
+  // Softened a touch at the edge, and set as the alpha.
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let sum = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const xx = Math.min(S - 1, Math.max(0, x + dx)), yy = Math.min(S - 1, Math.max(0, y + dy));
+      sum += wall[yy * S + xx] ? 0 : 1;
+    }
+    p[(y * S + x) * 4 + 3] = Math.round(sum / 9 * 255);
   }
   context.putImageData(pixels, 0, 0);
-});
-
-/** The face itself, in colour, 512² (the circle's corners clear): what the lens over the coin shows of him. */
-export const portraitPhoto = once((canvas, image) => {
-  canvas.width = canvas.height = 512;
-  drawFace(canvas.getContext('2d'), image, 512);
 });
 
 let atlas = null;
@@ -356,20 +372,88 @@ export function markCanvas(tool, onDark, ready) {
       paintSeal(context, tool.slice(SEAL.length));
       finish();
     } else if (!url) {
+      coinLog('mark', key, `${tool}: no mark for it, so the face is set in type (${onDark ? 'dark' : 'light'} ground)`);
       paintName(context, tool, onDark);
       finish();
     } else {
+      const source = url.startsWith('data:') ? 'inlined svg' : url.split('/').pop();
       const image = new Image();
       image.onload = () => {
-        if (!paintMark(context, image)) paintName(context, tool, onDark);
+        if (paintMark(context, image)) coinLog('mark', key, `${tool}: official mark, ${source} (${onDark ? 'dark' : 'light'} ground)`);
+        else { coinLog('mark', key, `${tool}: ${source} has no ink, so the face is set in type`); paintName(context, tool, onDark); }
         finish();
       };
-      image.onerror = () => { paintName(context, tool, onDark); finish(); };
+      image.onerror = () => { coinLog('mark', key, `${tool}: ${source} failed to load, so the face is set in type`); paintName(context, tool, onDark); finish(); };
       image.src = url;
     }
   }
   if (ready) (entry.done ? ready() : entry.waiting.add(ready));
   return entry.canvas;
+}
+
+/**
+ * The tool's mark as a shape that can melt into another (DotStage: the about's face, from stop to stop): MORPH.size²
+ * RGBA, rows from the foot up (as a texture reads them). Its alpha is how far each point is from the mark's edge, a
+ * half at the edge itself, more inside and less outside (MORPH.spread px either way spans it all), so two marks'
+ * shapes can be mixed and cut at a half; its colour is the mark's own inside it and, outside, the colour of the
+ * nearest of its ink, so a shape on its way to another is never uncoloured. Made once the mark is drawn (`ready`
+ * then has it) and kept.
+ */
+export const MORPH = { size: 512, spread: 110 };
+const morphs = new Map();
+export function morphField(tool, onDark, ready) {
+  const key = `${tool}|${onDark ? 'dark' : 'light'}`;
+  if (morphs.has(key)) { ready(morphs.get(key)); return; }
+  markCanvas(tool, onDark, () => {
+    if (!morphs.has(key)) morphs.set(key, buildMorph(markCanvas(tool, onDark)));
+    ready(morphs.get(key));
+  });
+}
+function buildMorph(source) {
+  const S = MORPH.size, N = S * S;
+  const scratch = document.createElement('canvas');
+  scratch.width = scratch.height = S;
+  const context = scratch.getContext('2d', { willReadFrequently: true });
+  context.drawImage(source, 0, 0, S, S);
+  const pixels = context.getImageData(0, 0, S, S).data;
+  const inside = new Uint8Array(N);
+  for (let i = 0; i < N; i++) inside[i] = pixels[i * 4 + 3] >= 128 ? 1 : 0;
+  // The nearest point that is (`want` 1) or is not (0) ink, for every point: two sweeps, each point taking the
+  // nearest of what its neighbours already found (dead reckoning; near enough to exact for this).
+  const nearest = want => {
+    const seed = new Int32Array(N).fill(-1), far = new Float32Array(N).fill(Infinity);
+    for (let i = 0; i < N; i++) if (inside[i] === want) { seed[i] = i; far[i] = 0; }
+    const take = (i, j) => {
+      const s = seed[j];
+      if (s < 0) return;
+      const dx = (i % S) - (s % S), dy = ((i / S) | 0) - ((s / S) | 0), d = dx * dx + dy * dy;
+      if (d < far[i]) { far[i] = d; seed[i] = s; }
+    };
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const i = y * S + x;
+      if (x > 0) take(i, i - 1);
+      if (y > 0) { take(i, i - S); if (x > 0) take(i, i - S - 1); if (x < S - 1) take(i, i - S + 1); }
+    }
+    for (let y = S - 1; y >= 0; y--) for (let x = S - 1; x >= 0; x--) {
+      const i = y * S + x;
+      if (x < S - 1) take(i, i + 1);
+      if (y < S - 1) { take(i, i + S); if (x < S - 1) take(i, i + S + 1); if (x > 0) take(i, i + S - 1); }
+    }
+    return { seed, far };
+  };
+  const ink = nearest(1), clear = nearest(0);
+  const data = new Uint8Array(N * 4);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = y * S + x, o = ((S - 1 - y) * S + x) * 4;
+    const from = inside[i] ? i : ink.seed[i], alpha = pixels[i * 4 + 3];
+    // (On the mark's own soft edge, how much of the point it covers says where the edge is in it, finer than a
+    // point; elsewhere, how far the nearest point across the edge is, less the half of a point the edge lies at.)
+    const signed = alpha > 0 && alpha < 255 ? alpha / 255 - .5
+      : inside[i] ? Math.sqrt(clear.far[i]) - .5 : .5 - Math.sqrt(ink.far[i]);
+    if (from >= 0) { data[o] = pixels[from * 4]; data[o + 1] = pixels[from * 4 + 1]; data[o + 2] = pixels[from * 4 + 2]; }
+    data[o + 3] = Math.max(0, Math.min(255, Math.round((.5 + signed / (2 * MORPH.spread)) * 255)));
+  }
+  return { data, size: S };
 }
 
 /** Whether a coin in this colour is dark enough for the marks made for dark grounds. */

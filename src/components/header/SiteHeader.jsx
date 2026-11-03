@@ -18,12 +18,12 @@ const CHAPTERS = {
 
 /**
  * Where the reader is, at this scroll: the chapter (null over the hero), and
- * whether the header is over a pinned screen (the journey's, the about's),
+ * whether the header is over a pinned screen (the journey's, the about's, the process's),
  * whose own layout leaves the header its room, or over the page's own flow,
  * which runs on under it (then it has a ground of its own to be read on).
  */
 function whereAt(scroll, vh) {
-  const journey = document.querySelector('.journey'), about = document.querySelector('.about'), contact = document.querySelector('.contact');
+  const journey = document.querySelector('.journey'), about = document.querySelector('.about'), process = document.querySelector('.process'), contact = document.querySelector('.contact');
   if (!journey) return { chapter: null, pinned: true };
   const top = node => node.getBoundingClientRect().top + scroll;
   const middle = scroll + vh / 2;
@@ -32,7 +32,7 @@ function whereAt(scroll, vh) {
   else if (about && middle >= top(about)) chapter = 'about';
   else if (journey.dataset.phase === 'work') chapter = 'work';
   const pinnedIn = node => node && scroll >= top(node) - 1 && scroll <= top(node) + node.offsetHeight - vh + 1;
-  return { chapter, pinned: scroll <= top(journey) + journey.offsetHeight - vh + 1 || pinnedIn(about) };
+  return { chapter, pinned: scroll <= top(journey) + journey.offsetHeight - vh + 1 || pinnedIn(about) || pinnedIn(process) };
 }
 
 /**

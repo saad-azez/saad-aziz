@@ -54,6 +54,7 @@
   --font-display: 'Aminute', 'Manrope', system-ui, sans-serif;
   --font-body: 'Manrope', system-ui, sans-serif;
   --font-editorial: 'DM Serif Display', Georgia, serif;
+  --font-hand: 'Caveat', 'Segoe Print', 'Bradley Hand', cursive;
 
   /*
    * Fluid type. Each step is `clamp(min, rem + vw, max)`, solved between a
@@ -128,6 +129,5 @@
     --figure-shade: #4b3545;
     --figure-sky: #927b8d;
     --figure-bounce: #8b6b7c;
-    --figure-highlight: #ffffff;
-}
+    --figure-highlight: #ffffff;}
 

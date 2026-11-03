@@ -1,0 +1,100 @@
+/**
+ * Process — the coin taken apart and put back together (components/process; processTransition has the choreography).
+ *
+ * One pinned screen, the room: the stage draws the coin and its pieces in it (webgl/stage/PuzzleBoard), cut off at the
+ * head's line. Its words are a layer of their own over the stage's canvas (.process-words, fixed, moved with the pinned
+ * screen as it comes and goes): the headline, one line at a time, each fading in once the last has faded out (the
+ * page sets each line's opacity and shift); and the steps round the top of the coin, said as
+ * their parts come back in (the page sets each one's fill-opacity).
+ *
+ * Colour: the brand's roles only (BRAND.md). The ground, the ink, and the accent on the labels.
+ *
+ * WEBFLOW HANDOFF
+ * `.process` is a tall section, pulled up over the end of the about's (a negative top margin, the coin's way over and one
+ * more); `.process__pin` inside it is Position: Sticky, top 0, height 100vh, hidden until the page's script shows it. The words layer is
+ * Position: Fixed, z-index 26 (over the stage's canvas, 25), built by the page's script (an embed: see WEBFLOW.md).
+ */
+
+/* (Laid over the end of the about's section, the coin's way over from the five years: components/process UNDER. So it
+   has no ground of its own, only its pinned screen, and that is hidden until the coin is nearly here.) */
+.process {
+  /* The foot of the site's header, fixed over this screen (components/header), as the about has it; and the room
+     under the headline. */
+  --head: calc(clamp(24px, 4vh, 48px) + 74px);
+  --foot: calc(clamp(28px, 5svh, 56px) + (100vh - 100svh));
+  position: relative;
+  z-index: 1;
+}
+
+/* The room: the same lit wall as the about's. */
+.process__pin {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 50%,
+      color-mix(in srgb-linear, var(--ground-glow) 70%, var(--ground)) 0,
+      color-mix(in srgb-linear, var(--ground-glow) 30%, var(--ground)) 60svh,
+      var(--ground) 120svh);
+  background-color: var(--ground);
+  visibility: hidden;
+}
+
+/* The room under the head, over the foot, inside the frame. (Measured, never drawn.) */
+.process__frame { position: absolute; top: var(--head); bottom: var(--foot); left: var(--frame-inset); right: var(--frame-inset); pointer-events: none; }
+.process__hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ----- the words, over the coin ------------------------------------------- */
+
+.process-words {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 26;
+  color: var(--ink);
+  pointer-events: none;
+  display: none;
+  will-change: transform;
+}
+.process-words p { margin: 0; }
+
+/* The headline, at the foot of the room: its label, then one line at a time. */
+.process-words__head { position: absolute; display: grid; gap: 10px; }
+.process-words__kicker {
+  color: var(--accent);
+  font-size: var(--step-label);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.process-words__lines { display: grid; }
+.process-words__line {
+  grid-area: 1 / 1;
+  padding: .12em 0 .2em;
+  font: 400 clamp(28px, 3.4vw, 52px)/1.02 var(--font-display);
+  letter-spacing: var(--tracking-display);
+  white-space: nowrap;
+  visibility: hidden;
+  will-change: transform, opacity;
+}
+
+/* The steps round the top of the coin: each in the ink once said, the one said last in the accent. */
+.process-words__ring { position: absolute; overflow: visible; }
+.process-words__ring text {
+  font: 700 var(--step-label) var(--font-body);
+  letter-spacing: .32em;
+}
+.process-words__step { fill: var(--ink-2); fill-opacity: 0; transition: fill .4s ease; }
+.process-words__step[data-latest="true"] { fill: var(--accent); }
+
+/* Upright: the headline across the foot, over two lines if it needs them. */
+.process-words[data-layout="tall"] .process-words__line { font-size: clamp(28px, 8.4vw, 40px); white-space: normal; }
+
+@media (max-width: 600px), (max-aspect-ratio: 4/5) {
+  .process { --head: calc(clamp(24px, 4vh, 48px) + 60px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .process-words__step { transition: none; }
+}

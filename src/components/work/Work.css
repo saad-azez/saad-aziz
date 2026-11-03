@@ -156,7 +156,7 @@
   opacity: var(--t); transform: translateY(calc((1 - var(--t)) * -.5em)) rotate(calc((1 - var(--t)) * 7deg)); }
 .work__summary .w:nth-child(odd) { transform: translateY(calc((1 - var(--t)) * -.5em)) rotate(calc((1 - var(--t)) * -8deg)); }
 .work__made { margin: 24px 0 0; }
-/* The rope's lane: the stage stretches the scroll rope along its foot, from post to post, and the coin walks it. */
+/* The rope's lane: the stage stretches the scroll rope along its foot, from post to post, and the coin is tossed along it. */
 .work__rope { height: clamp(64px, 6vw, 92px); }
 /*
  * The tools hang from the rope as tags on threads, each where the coin stops over it (DotStage station: evenly

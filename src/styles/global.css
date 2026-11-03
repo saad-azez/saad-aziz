@@ -2,6 +2,8 @@
 
 @font-face { font-family: 'Manrope'; font-style: normal; font-weight: 200 800; font-display: swap; src: url('/fonts/manrope.ttf') format('truetype'); }
 @font-face { font-family: 'DM Serif Display'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/dm-serif-display.ttf') format('truetype'); }
+/* The hand: what is written by hand on the page (the notes along the about's road). */
+@font-face { font-family: 'Caveat'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/fonts/caveat.ttf') format('truetype'); }
 
 
 /**

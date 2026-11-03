@@ -55,24 +55,21 @@
       color-mix(in srgb-linear, var(--ground-glow) 25%, var(--ground)) 80svh,
       var(--ground) 120svh);
   background-color: var(--ground);
-  clip-path: circle(var(--lens-r, 0px) at var(--lens-x, 50%) var(--lens-y, 50%));
+  /* The window round the coin is set on the element by Journey.jsx (clip-path), not through a custom property:
+     a custom property here would restyle the whole work with every frame of the scroll. */
 }
-.journey[data-phase="work"] > .journey__pin > .work { clip-path: none; }
+.journey[data-phase="work"] > .journey__pin > .work { clip-path: none !important; }
 .journey[data-phase="work"] > .journey__pin > .hero { visibility: hidden; pointer-events: none; }
 .journey[data-phase="hero"] > .journey__pin > .work { pointer-events: none; }
 
-/* The window's rim: one hairline, the width of the page's rules. */
+/* The window's rim: one hairline, the width of the page's rules. Its size, place and opacity are set by Journey.jsx. */
 .journey__lens {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 2;
-  width: calc(var(--lens-r, 0px) * 2);
-  height: calc(var(--lens-r, 0px) * 2);
   border: 1px solid var(--ink-3);
   border-radius: 50%;
-  opacity: var(--lens-line, 0);
-  transform: translate(calc(var(--lens-x, 0px) - var(--lens-r, 0px)), calc(var(--lens-y, 0px) - var(--lens-r, 0px)));
   pointer-events: none;
 }
 .journey[data-phase="work"] .journey__lens { display: none; }

@@ -78,6 +78,28 @@ export default function Work() {
   };
 
   useEffect(() => { stage.setActive(active, howRef.current); }, [active]);
+  // The rope (and the tags on it) sit at one height in every project: each project's rope lane is measured from the
+  // top of its copy (its name, role and summary may be taller or shorter), and its tools are pushed down to the
+  // tallest. So the rope does not move between projects, or with the coin. Measured again as the width changes.
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const fit = () => {
+      const projects = [...root.querySelectorAll('.work__project')].map(node => ({ node, made: node.querySelector('.work__made') })).filter(({ made }) => made);
+      projects.forEach(({ made }) => { made.style.marginTop = ''; });
+      const base = projects.map(({ made }) => parseFloat(getComputedStyle(made).marginTop) || 0);
+      // (From the boxes, not offsetTop: the active project's article is positioned, the others are not, so their offsets differ.)
+      const lanes = projects.map(({ node, made }) => made.getBoundingClientRect().top - node.getBoundingClientRect().top);
+      const lane = Math.max(...lanes);
+      projects.forEach(({ made }, i) => { made.style.marginTop = `${base[i] + lane - lanes[i]}px`; });
+    };
+    fit();
+    // Again once the fonts are in (the summaries' lines change with them), and as the articles change size.
+    document.fonts?.ready.then(fit);
+    const observer = new ResizeObserver(fit);
+    root.querySelectorAll('.work__project').forEach(node => observer.observe(node));
+    window.addEventListener('resize', fit);
+    return () => { observer.disconnect(); window.removeEventListener('resize', fit); };
+  }, []);
   useEffect(() => { stage.setLit(lit); }, [lit]);
   // A flick decides where the lamp lands: the stage says which project that is.
   useEffect(() => {
@@ -287,10 +309,11 @@ export default function Work() {
           part(card.querySelectorAll('.work__summary .w'),
             { y: -9, rotation: i => (i % 2 ? -9 : 7), opacity: 0 },
             { y: 0, rotation: 0, opacity: 1, duration: 1.1, ease: 'elastic.out(1, .38)', stagger: .016, clearProps: 'transform,opacity' }, .2);
-          // The tags drop onto their threads under the rope and swing there.
+          // The tags drop onto their threads under the rope and swing there: on by the time the coin, tossed high as
+          // the project changed, comes down among them (ropeTour.js).
           part(card.querySelectorAll('.work__hang'),
             { y: -16, rotation: i => (i % 2 ? 14 : -12), opacity: 0 },
-            { y: 0, rotation: 0, opacity: 1, duration: 1.4, ease: 'elastic.out(1, .3)', stagger: .07, clearProps: 'transform,opacity' }, .3);
+            { y: 0, rotation: 0, opacity: 1, duration: 1.4, ease: 'elastic.out(1, .3)', stagger: .05, clearProps: 'transform,opacity' }, .12);
         });
       }
     }, root);
@@ -390,7 +413,7 @@ export default function Work() {
           {projects.map((project, i) => card(project, i, <>
             <p className="work__summary"><Words text={projectPending(project) ? 'Not published yet.' : project.summary} /></p>
             {/* The tools: the scroll rope comes in here (`.work__rope`, drawn by the stage), tied between two posts,
-                and the coin walks it, from tool to tool, turning to each; their names hang from it as tags on threads,
+                and the coin is tossed along it, from tool to tool, turning each up as it lands; their names hang from it as tags on threads,
                 the one the coin is over lit and swinging; the tools with no mark after them in words. */}
             <div className="work__made">
               <div className="work__rope" aria-hidden="true" />

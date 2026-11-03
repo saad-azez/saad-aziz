@@ -204,14 +204,19 @@ export const WORK = {
  * they stood in October 2026. Nothing is rounded up.
  *
  * `card`: the chapter's title, the coin turned over to his portrait under it.
- * `line`: the tower the coin climbs (webgl/stage/tower.js), a stop for each
- * step of the way, in order up the road wound round it, the last at the
- * summit; `year` cut into the column at the stop, `face` the tool the coin
- * shows there (webgl/coinMarks.js), `span` how long it lasted, beside the
- * year in the words about it. (`at` and `until`, in years, and `from`, `to`
- * and `now` date each stop: 2022.75 is October 2022, `until` 'now' today.)
- * `process`: how a project goes; `figure` names the drawing of the coin
- * beside it at that step.
+ * `line`: the five years, set as a poster: the coin as a wheel, tipped and
+ * leaning, rolling from stop to stop, and the words at its lean. `title` in
+ * three rows; for each stop, `year` (big, by the title), and beside it, small,
+ * `where` and `role`, the story (`text`), and `place` and `span`; `face` the
+ * tool the coin shows there (webgl/coinMarks.js).
+ * `process`: how a project goes, as the coin taken apart and put back
+ * together (components/process): `coin`, what its face says, each in turn: the
+ * steps as it comes in, `mine` once they are done, `yours` as it comes apart
+ * (webgl/stage/coinWords); `lines`, the headline as it changes, one after another; each
+ * step's two `parts`; `heart`, said on the back of the coin's middle piece, the
+ * one that draws the rest back in; and each step's two `parts`, printed on the backs of the coin's
+ * pieces and drawn back in together; `text`, what the step is, for a screen
+ * reader; `whole`, what it comes to. `title` is engraved round the ring after it.
  * `numbers` and `bench`: the page after it, in plain flow.
  */
 export const ABOUT = {
@@ -251,64 +256,63 @@ export const ABOUT = {
       artist: { label: 'Side B', title: 'The 3D artist', text: 'This side is a model: every facet is a polygon. Blender and Spline, scene after scene.' },
     },
     /** What can be done with the coin (with a mouse, and on a touch screen). */
-    hint: 'Drag to flip · hover to see the real me',
-    hintTouch: 'Tap to flip · drag to spin',
+    hint: 'Drag to flip',
+    hintTouch: 'Tap or drag to flip',
   },
   line: {
-    title: 'Five years, five stops.',
+    title: ['Five', 'years,', 'five stops.'],
     lede: 'From fixing layouts to building worlds.',
-    from: 2021,
-    to: 2027,
-    now: 2026.79,
     stops: [
       {
-        id: 'protech', year: '2021', at: 2021.58, until: 2022.08, span: '6 months',
-        where: 'Protech Logics', role: 'Web developer, intern', place: 'Rawalpindi', face: 'Angular',
+        id: 'protech', year: '2021', span: '6 months', where: 'Protech Logics', role: 'Web developer, intern', place: 'Rawalpindi', face: 'Angular',
         text: 'Where it started: an Angular team, a pile of cross-browser bugs, and my first layouts that behaved on every screen.',
       },
       {
-        id: 'vu', year: '2022', at: 2022.25, until: 'now', span: 'still studying',
-        where: 'Virtual University of Pakistan', role: 'BS, Software Engineering', place: 'Online', face: 'Custom code',
+        id: 'vu', year: '2022', span: 'still studying', where: 'Virtual University', role: 'BS, Software Engineering', place: 'Online', face: 'Custom code',
         text: 'I started my degree in software engineering and have studied alongside client work ever since. The theory keeps the code honest.',
       },
       {
-        id: 'maplin', year: '2022', at: 2022.75, until: 2023.58, span: '10 months',
-        where: 'Maplin Studio', role: 'Front-end developer', place: 'London, remote', face: 'React',
-        text: 'My first studio. I led front-end work in React and Material UI, brought TypeScript into the codebase, and kept the Git history tidy for a remote team.',
+        id: 'maplin', year: '2022', span: '10 months', where: 'Maplin Studio', role: 'Front-end developer', place: 'London, remote', face: 'React',
+        text: 'My first studio. I led front-end work in React and Material UI, brought TypeScript into the codebase, and kept the Git history tidy.',
       },
       {
-        id: 'fiverr', year: '2024', at: 2024.5, until: 'now', span: 'two years, 24 reviews',
-        where: 'Fiverr', role: 'Freelance', place: 'Clients in 12 countries', face: 'Spline',
+        id: 'fiverr', year: '2024', span: 'two years, 24 reviews', where: 'Fiverr', role: 'Freelance', place: 'Clients in 12 countries', face: 'Spline',
         text: 'I went independent. Webflow builds turned into Spline scenes, Spline scenes into full 3D sites, and 24 reviews later the 3D became the job.',
       },
       {
-        id: 'now', year: 'Now', at: 2026.79,
-        where: 'Here', role: 'Creative developer', place: 'Remote, worldwide', face: 'Blender',
-        text: 'Today I build interactive 3D websites end to end: modelled in Blender or Spline, built in Three.js, Webflow or Framer, and made fast enough to enjoy.',
+        id: 'now', year: 'Now', where: 'Today', role: 'Creative developer', place: 'Remote, worldwide', face: 'Blender',
+        text: 'I build interactive 3D websites end to end: modelled in Blender or Spline, built in Three.js, Webflow or Framer, and made fast enough to enjoy.',
       },
     ],
   },
   process: {
-    title: 'From the model to the code.',
-    lede: 'Four steps, one person, no hand-offs. Here’s how a project runs.',
+    kicker: 'How a project runs',
+    title: ['From the model', 'to the code.'],
+    coin: {
+      says: [['First', 'I listen'], ['Next', 'I model'], ['Then', 'I build'], ['Last', 'I finish']],
+      mine: ['My', 'process'], yours: ['Your', 'idea'],
+    },
+    heart: 'Saadi',
+    lines: ['Here’s how I work.', 'It starts with your idea.', 'I find where it comes apart.', 'Every part, made by hand.', 'Then I bring it all back in.', 'Nothing left loose.'],
     steps: [
       {
-        id: 'listen', title: 'Listen', figure: 'Sketched',
+        id: 'listen', title: 'Listen', parts: ['Brief', 'References'],
         text: 'A short brief, a few references, and the right questions, until I can see what you’re picturing.',
       },
       {
-        id: 'model', title: 'Model', figure: 'Modelled',
+        id: 'model', title: 'Model', parts: ['Shapes', 'Light'],
         text: 'I model it myself in Blender or Spline, built for the browser from the first vertex: light enough to load fast, detailed enough to hold attention.',
       },
       {
-        id: 'build', title: 'Build', figure: 'Built',
+        id: 'build', title: 'Build', parts: ['Motion', 'Code'],
         text: 'Then I wire the scene into your site, in Webflow, Framer or custom code, so it moves with the scroll and answers the pointer.',
       },
       {
-        id: 'finish', title: 'Finish', figure: 'Finished',
+        id: 'finish', title: 'Finish', parts: ['Phones', 'Handover'],
         text: 'The last ten percent is where it shows: the details, the phones, the load times, and a handover your team can actually use.',
       },
     ],
+    whole: 'Four steps. One person. No hand-offs.',
   },
   /** Counted from the Fiverr reviews: 24 of them, 23 at five stars and one at 4.3. Check the count against the profile. */
   numbers: [
@@ -318,6 +322,15 @@ export const ABOUT = {
     { value: 2, label: 'clients came back for more' },
     { value: 5, label: 'years writing code, since 2021' },
   ],
+  /**
+   * After the process: the band of words and the coin become a ring (components/about), set from the numbers, the
+   * bench and PERSON; `where` is the city's place on the map (Islamabad), `tools` what he builds with, in its row.
+   */
+  more: {
+    label: 'Saad in numbers, and what else he makes',
+    where: '33°41′N 73°03′E',
+    tools: ['React', 'Angular', 'TypeScript', 'Three.js', 'Webflow', 'Framer', 'Spline', 'Blender', 'GSAP'],
+  },
   bench: {
     title: 'Also on the bench.',
     items: [

@@ -1,4 +1,4 @@
-import portrait from '../../../assets/portrait.jpeg';
+import portrait from '../../../assets/portrait-aside.jpeg';
 import letters from '../../../assets/monogram-letters.svg';
 import ring from '../../../assets/monogram-ring.svg';
 import blender from '../../../assets/logos/brand/blender.svg';
@@ -100,8 +100,8 @@ const KINDS = {
       c.fillStyle = '#2a2226';
       c.fillRect(26, 26, 388, 388);
       if (ready(img)) {
-        // Head and shoulders: the portrait is 1024 × 1536, the face a little above its middle.
-        const side = img.naturalWidth * .56, sx = img.naturalWidth * .22, sy = img.naturalHeight * .22;
+        // Head and shoulders: the picture is 960 × 1280, the face left of its middle and above it.
+        const side = img.naturalWidth * .625, sx = img.naturalWidth * .135, sy = img.naturalHeight * .195;
         c.drawImage(img, sx, sy, side, side, 26, 26, 388, 388);
         // A little warmth and fade, as an instant print has.
         c.fillStyle = 'rgba(255, 214, 170, .08)';

@@ -182,8 +182,22 @@ export default class ReviewRing {
 
   redraw() {
     if (!this.fonts || !this.palette) return;
+    this.rows = 0;
     this.panes.forEach(pane => this.drawQuote(pane, Math.max(0, pane.circle)));
     this.radius = 0;
+  }
+
+  /** A review's words, wrapped to `width` px of a pane in the context's font (drawn `S` times over): its lines. */
+  wrap(g, quote, width, S) {
+    const lines = [[]], space = g.measureText(' ').width / S;
+    let used = 0;
+    for (const word of `“${quote.text}”`.split(' ')) {
+      const wide = g.measureText(word).width / S;
+      if (used && used + space + wide > width) { lines.push([]); used = 0; }
+      lines[lines.length - 1].push(word);
+      used += (used ? space : 0) + wide;
+    }
+    return lines;
   }
 
   /** A review on its pane: who said it (their initial on a chip), the words, the name in them circled `circle` of the way round, who, five stars. */
@@ -193,42 +207,38 @@ export default class ReviewRing {
     const body = getComputedStyle(document.body).fontFamily || 'sans-serif';
     const w = pane.w, pad = 14, chip = 26, x0 = pad + chip + 10, width = w - x0 - pad - 2, size = 14, lead = 18;
     const g = canvas.getContext('2d');
-    // The words, wrapped to the pane, the name kept whole.
+    // The words, wrapped to the pane, the name kept whole. Every pane is one size, as tall as the longest review
+    // needs (`rows` lines), so the ring is even all the way round; a shorter one is set in the middle of its pane.
+    g.setTransform(1, 0, 0, 1, 0, 0);
     g.font = `400 ${size * S}px ${editorial}`;
-    const words = `“${quote.text}”`.split(' ');
-    const lines = [[]];
-    let used = 0;
-    const space = g.measureText(' ').width / S;
-    for (const word of words) {
-      const wide = g.measureText(word).width / S;
-      if (used && used + space + wide > width) { lines.push([]); used = 0; }
-      lines[lines.length - 1].push(word);
-      used += (used ? space : 0) + wide;
-    }
-    const h = Math.max(pad * 2 + chip, 14 + lines.length * lead + 20 + 10);
+    const lines = this.wrap(g, quote, width, S);
+    if (!this.rows) this.rows = Math.max(...this.panes.map(other => this.wrap(g, other.quote, width, S).length));
+    const rows = Math.max(this.rows, lines.length), drop = (rows - lines.length) * lead / 2;
+    const h = Math.max(pad * 2 + chip, 14 + rows * lead + 20 + 10);
     pane.h = h;
     canvas.width = Math.round(w * S);
     canvas.height = Math.round(h * S);
     g.setTransform(S, 0, 0, S, 0, 0);
     g.clearRect(0, 0, w, h);
     // The chip.
-    const grad = g.createLinearGradient(pad, 14, pad + chip, 14 + chip);
+    const top = 14 + drop;
+    const grad = g.createLinearGradient(pad, top, pad + chip, top + chip);
     grad.addColorStop(0, mixHex(palette.accent, '#ffffff', .28));
     grad.addColorStop(1, palette.accent);
     g.fillStyle = grad;
     g.beginPath();
-    g.roundRect(pad, 14, chip, chip, 9);
+    g.roundRect(pad, top, chip, chip, 9);
     g.fill();
     g.fillStyle = '#ffffff';
     g.font = `400 13px ${editorial}`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText(quote.by[0].toUpperCase(), pad + chip / 2, 14 + chip / 2 + 1);
+    g.fillText(quote.by[0].toUpperCase(), pad + chip / 2, top + chip / 2 + 1);
     // The words, the name in the accent and circled.
     g.textAlign = 'left';
     g.textBaseline = 'alphabetic';
     g.font = `400 ${size}px ${editorial}`;
-    let y = 14 + size;
+    let y = top + size;
     for (const line of lines) {
       let x = x0;
       line.forEach((word, n) => {

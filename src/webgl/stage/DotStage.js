@@ -16,6 +16,8 @@ import { aboutTransition, aboutFaces, LINE, ABOUT_SCROLL, WHEEL } from './aboutT
 import { markCanvas, morphField, MORPH, isDark, hasMark, COIN_SKILLS, MONOGRAM, PORTRAIT, MESH, ASCII, portraitPhoto, asciiAtlas } from '../coinMarks.js';
 import { COIN_LOG, coinLog } from '../coinLog.js';
 import { startTour, stepTour, endTour, tourShown, tourFooting, stationAt, HIGH_TIME, TOSS } from './ropeTour.js';
+import { warmGently, afterLoader, siteSettled } from '../gpuWork.js';
+import { perf } from '../../lib/perf.js';
 import Book, { itemAt, ringSize, VIEW, PAGE_ASPECT, BOOK as MAKE } from './Book.js';
 import { coverColours, COVER_STICKER } from './bookCovers.js';
 import { makeJournalCovers, LINKS } from './journal/coverArt.js';
@@ -474,6 +476,7 @@ class DotStage {
     if (this.renderer) return true;
     try {
       this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      perf.renderer('stage', this.renderer);
     } catch {
       return false;
     }
@@ -556,6 +559,8 @@ class DotStage {
   /** The wordmark's entrance has finished; the dot is on its stem and may leave. */
   heroAtRest() {
     this.heroRest = true;
+    // The opening is over: the work held back for it may start (gpuWork.afterLoader).
+    siteSettled();
     this.book?.load(() => { this.renderUntil = performance.now() + 100; });
   }
 
@@ -576,7 +581,8 @@ class DotStage {
     if (this.heroRest) this.book.load(() => { this.renderUntil = performance.now() + 100; });
     const room = work.stage;
     // Its drawing code is compiled once, while nothing moves.
-    if (!this.bookWarm) { this.warm(this.workScene, this.book.group); this.bookWarm = true; }
+    // (Not before the loader has gone: the book is not on the first screen, and compiling it would stall the loader.)
+    if (!this.bookWarm) { this.bookWarm = true; afterLoader(() => this.warm(this.workScene, this.book?.group), 'book shaders'); }
     this.renderUntil = performance.now() + 200;
   }
 
@@ -1631,14 +1637,9 @@ class DotStage {
    * on the first frame it is shown (which would stall that frame, mid-scroll).
    */
   warm(scene, object, renderer = this.renderer, camera = this.camera) {
-    if (!renderer || !object) return;
-    const was = object.visible;
-    object.visible = true;
-    const parents = [];
-    for (let p = object.parent; p; p = p.parent) { parents.push([p, p.visible]); p.visible = true; }
-    try { renderer.compile(scene, camera); } catch { /* compiled on first draw instead */ }
-    parents.forEach(([p, v]) => { p.visible = v; });
-    object.visible = was;
+    if (!renderer || !object) return Promise.resolve();
+    // Hidden or not, everything under `object` is compiled, a piece a frame (gpuWork.js).
+    return warmGently(renderer, scene, camera, object);
   }
 
   /* ----- the journey against the scroll ------------------------------ */
@@ -1978,8 +1979,11 @@ class DotStage {
   /** The book, the coin, then the rope over them, each with a fresh depth buffer. */
   render() {
     this.renderCount = (this.renderCount ?? 0) + 1;
+    let drawn = 0;
+    const count = () => { drawn += this.renderer.info.render.calls; };
     this.renderer.clear();
     this.renderer.render(this.workScene, this.camera);
+    count();
     // The coin over everything, except while it lies in its seat on the cover: then it is part of the book.
     if (!(this.coinSeated && this.coin.visible && this.pose?.onBook)) this.renderer.clearDepth();
     // The process's puzzle (the coin in pieces), under the head's line only.
@@ -1989,11 +1993,17 @@ class DotStage {
       this.renderer.setScissorTest(true);
       this.renderer.setScissor(0, height - below, this.viewW || window.innerWidth, below - above);
       this.renderer.render(this.puzzle.scene, this.camera);
+      count();
       this.renderer.setScissorTest(false);
     }
     this.renderer.render(this.coinScene, this.camera);
+    count();
     this.renderer.clearDepth();
     this.renderer.render(this.uiScene, this.camera);
+    count();
+    // Nothing on it: a full-screen sheet of nothing the browser need not blend over the page.
+    const empty = drawn === 0;
+    if (empty !== this.canvasEmpty) { this.canvasEmpty = empty; this.renderer.domElement.style.visibility = empty ? 'hidden' : ''; }
   }
 
   /* ----- the about: the other side of the coin ----------------------- */

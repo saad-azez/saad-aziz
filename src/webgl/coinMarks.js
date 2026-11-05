@@ -1,26 +1,15 @@
-import threeOnDark from '../assets/logos/brand/threejs-on-dark.svg';
-import threeOnLight from '../assets/logos/brand/threejs-on-light.svg';
-import blender from '../assets/logos/brand/blender.svg';
-import reactOnDark from '../assets/logos/brand/react-on-dark.svg';
-import reactOnLight from '../assets/logos/brand/react-on-light.svg';
-import figma from '../assets/logos/brand/figma.svg';
-import framerOnDark from '../assets/logos/brand/framer-on-dark.svg';
-import framerOnLight from '../assets/logos/brand/framer-on-light.svg';
-import webflow from '../assets/logos/brand/webflow.svg';
-import vite from '../assets/logos/brand/vite.svg';
-import nextjs from '../assets/logos/brand/nextjs.svg';
-import shopify from '../assets/logos/brand/shopify.svg';
-import lottie from '../assets/logos/brand/lottiefiles.svg';
-import javascript from '../assets/logos/brand/javascript.svg';
-import gsapOnDark from '../assets/logos/brand/gsap-on-dark.svg';
-import gsapOnLight from '../assets/logos/brand/gsap-on-light.svg';
-import spline from '../assets/logos/brand/spline.png';
-import customCode from '../assets/logos/brand/custom-code.svg';
-import angular from '../assets/logos/brand/angular.svg';
 import monogramLetters from '../assets/monogram-letters.svg';
 import monogramRing from '../assets/monogram-ring.svg';
 import portrait from '../assets/portrait.jpeg';
 import { coinLog } from './coinLog.js';
+
+/**
+ * The marks, ready for the coin (scripts/build-coin-marks.mjs, from logos/brand): `<file>.png` the face, fitted, and
+ * `<file>.morph.png` its melting shape. Only those a coin shows are ever fetched.
+ */
+const FILES = import.meta.glob('../assets/logos/coin/*.png', { eager: true, query: '?url', import: 'default' });
+const fileUrl = name => FILES[`../assets/logos/coin/${name}.png`];
+import { afterLoader } from './gpuWork.js';
 
 /**
  * The tools the coin turns through in the hero, in the order the hero's copy
@@ -68,24 +57,31 @@ export const ASCII = { ramp: ' .:-=+*xoX#%@', scramble: '01<>/\\|{}[]$&?!;~^', s
  * version for each ground (black-and-white marks) give `dark` (for a dark coin)
  * and `light`; the rest keep one file on either. Sources: svgl.app, GSAP's
  * brand assets (gsap.com/brand), and Spline's own site. See logos/README.md.
+ * The coin uses them as PNGs made from those files (logos/coin, `npm run coin:marks`).
  */
 const MARKS = {
-  'Three.js': { dark: threeOnDark, light: threeOnLight },
-  Blender: { any: blender },
-  React: { dark: reactOnDark, light: reactOnLight },
-  Figma: { any: figma },
-  Framer: { dark: framerOnDark, light: framerOnLight },
-  Webflow: { any: webflow },
-  Vite: { any: vite },
-  'Next.js': { any: nextjs },
-  Shopify: { any: shopify },
-  Lottie: { any: lottie },
-  JavaScript: { any: javascript },
-  GSAP: { dark: gsapOnDark, light: gsapOnLight },
-  Spline: { any: spline },
-  'Custom code': { any: customCode },
-  Angular: { any: angular },
+  'Three.js': { dark: 'threejs-on-dark', light: 'threejs-on-light' },
+  Blender: { any: 'blender' },
+  React: { dark: 'react-on-dark', light: 'react-on-light' },
+  Figma: { any: 'figma' },
+  Framer: { dark: 'framer-on-dark', light: 'framer-on-light' },
+  Webflow: { any: 'webflow' },
+  Vite: { any: 'vite' },
+  'Next.js': { any: 'nextjs' },
+  Shopify: { any: 'shopify' },
+  Lottie: { any: 'lottiefiles' },
+  JavaScript: { any: 'javascript' },
+  GSAP: { dark: 'gsap-on-dark', light: 'gsap-on-light' },
+  Spline: { any: 'spline' },
+  'Custom code': { any: 'custom-code' },
+  Angular: { any: 'angular' },
 };
+
+/** The file a tool's mark is in, for a coin that is dark (`onDark`) or light. */
+function markFile(tool, onDark) {
+  const set = MARKS[tool];
+  return set && (set.any ?? (onDark ? set.dark : set.light));
+}
 
 /** Whether the coin has a face for this tool. */
 export const hasMark = tool => Object.hasOwn(MARKS, tool);
@@ -94,28 +90,16 @@ export const SIZE = 1024;
 /** How much of the face the mark's widest side takes. */
 const FILL = .62;
 
-/** Fit the mark's visible ink (not its padding) into the middle of the face, keeping its proportions. */
+// Painting a mark and reading its pixels back holds up the GPU, which the loader's thread shares: they wait in the
+// site's queue for work after the loader (gpuWork.afterLoader), and go one at a time, whenever there is a moment.
+
+/**
+ * The mark onto the face. The marks come ready-fitted (scripts/build-coin-marks.mjs: the ink centred, its longer
+ * side FILL of the face), so this is one draw: no rasterising an SVG at SIZE², no reading pixels back to find the ink.
+ */
 function paintMark(context, image) {
-  const scratch = document.createElement('canvas');
-  scratch.width = scratch.height = SIZE;
-  const source = scratch.getContext('2d');
-  const w = image.naturalWidth || image.width || SIZE, h = image.naturalHeight || image.height || SIZE;
-  const fit = Math.min(SIZE / w, SIZE / h);
-  source.drawImage(image, (SIZE - w * fit) / 2, (SIZE - h * fit) / 2, w * fit, h * fit);
-  const pixels = source.getImageData(0, 0, SIZE, SIZE).data;
-  let left = SIZE, right = -1, top = SIZE, bottom = -1;
-  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
-    if (pixels[(y * SIZE + x) * 4 + 3] < 16) continue;
-    if (x < left) left = x; if (x > right) right = x;
-    if (y < top) top = y; if (y > bottom) bottom = y;
-  }
-  if (right < left) return false;
-  const width = right - left + 1, height = bottom - top + 1;
-  const scale = SIZE * FILL / Math.max(width, height);
   context.clearRect(0, 0, SIZE, SIZE);
-  context.drawImage(scratch, left, top, width, height,
-    (SIZE - width * scale) / 2, (SIZE - height * scale) / 2, width * scale, height * scale);
-  return true;
+  context.drawImage(image, 0, 0, SIZE, SIZE);
 }
 
 /** A tool with no mark is set in type, in the coin's contrasting ink. */
@@ -343,8 +327,8 @@ export function markCanvas(tool, onDark, ready) {
     entry = { canvas, done: false, waiting: new Set() };
     cache.set(key, entry);
     const context = canvas.getContext('2d');
-    const set = MARKS[tool];
-    const url = set && (set.any ?? (onDark ? set.dark : set.light));
+    const name = markFile(tool, onDark);
+    const url = name && fileUrl(name);
     const finish = () => {
       entry.done = true;
       entry.waiting.forEach(callback => callback());
@@ -376,15 +360,16 @@ export function markCanvas(tool, onDark, ready) {
       paintName(context, tool, onDark);
       finish();
     } else {
-      const source = url.startsWith('data:') ? 'inlined svg' : url.split('/').pop();
+      const source = `${name}.png`;
       const image = new Image();
-      image.onload = () => {
-        if (paintMark(context, image)) coinLog('mark', key, `${tool}: official mark, ${source} (${onDark ? 'dark' : 'light'} ground)`);
-        else { coinLog('mark', key, `${tool}: ${source} has no ink, so the face is set in type`); paintName(context, tool, onDark); }
+      // Fetched and decoded (off the main thread) once the opening has settled, then painted at the next free moment.
+      const paint = () => afterLoader(() => {
+        paintMark(context, image);
+        coinLog('mark', key, `${tool}: official mark, ${source} (${onDark ? 'dark' : 'light'} ground)`);
         finish();
-      };
-      image.onerror = () => { coinLog('mark', key, `${tool}: ${source} failed to load, so the face is set in type`); paintName(context, tool, onDark); finish(); };
-      image.src = url;
+      }, `coin mark ${tool}`);
+      const failed = () => { coinLog('mark', key, `${tool}: ${source} failed to load, so the face is set in type`); paintName(context, tool, onDark); finish(); };
+      afterLoader(() => { image.src = url; image.decode().then(paint, () => (image.complete && image.naturalWidth ? paint() : failed())); }, 'coin mark');
     }
   }
   if (ready) (entry.done ? ready() : entry.waiting.add(ready));
@@ -404,6 +389,42 @@ const morphs = new Map();
 export function morphField(tool, onDark, ready) {
   const key = `${tool}|${onDark ? 'dark' : 'light'}`;
   if (morphs.has(key)) { ready(morphs.get(key)); return; }
+  // Worked out at build time (scripts/build-coin-marks.mjs): fetched, decoded off the main thread, and unpacked.
+  const name = markFile(tool, onDark), prepared = name && FILES[`../assets/logos/coin/${name}.morph.png`];
+  if (prepared) {
+    if (!loading.has(key)) loading.set(key, loadMorph(prepared).then(field => { morphs.set(key, field); return field; }));
+    loading.get(key).then(ready, () => { loading.delete(key); morphs.delete(key); buildFromMark(tool, onDark, key, ready); });
+    return;
+  }
+  buildFromMark(tool, onDark, key, ready);
+}
+const loading = new Map();
+
+/** A prepared field: the colour in the top half of the sheet, the shape in the red of the bottom half. */
+function loadMorph(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    afterLoader(() => {
+      image.src = url;
+      image.decode().then(() => afterLoader(() => {
+        const S = MORPH.size, N = S * S;
+        const canvas = document.createElement('canvas');
+        canvas.width = S; canvas.height = S * 2;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        context.drawImage(image, 0, 0);
+        const sheet = context.getImageData(0, 0, S, S * 2).data, data = new Uint8Array(N * 4);
+        for (let i = 0; i < N; i++) {
+          const o = i * 4;
+          data[o] = sheet[o]; data[o + 1] = sheet[o + 1]; data[o + 2] = sheet[o + 2]; data[o + 3] = sheet[(N + i) * 4];
+        }
+        resolve({ data, size: S });
+      }, 'coin morph'), reject);
+    }, 'coin morph fetch');
+  });
+}
+
+/** No prepared field (a mark added without running the script): worked out here from the drawn mark. */
+function buildFromMark(tool, onDark, key, ready) {
   markCanvas(tool, onDark, () => {
     if (!morphs.has(key)) morphs.set(key, buildMorph(markCanvas(tool, onDark)));
     ready(morphs.get(key));

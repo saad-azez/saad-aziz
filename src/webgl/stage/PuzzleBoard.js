@@ -3,6 +3,7 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SURFACE_LIGHTING } from '../hero/lighting.glsl.js';
 import { discPieces } from './puzzle.js';
 import { drawn, turned, PROCESS_AT } from './processTransition.js';
+import { blurPlane, channel } from '../../lib/canvasBlur.js';
 
 /**
  * The process's puzzle (DotStage stepProcess; components/process lays it out, processTransition has the
@@ -115,12 +116,16 @@ const mix = (a, b, t) => a + (b - a) * t;
 function shadowTexture() {
   const S = 128, canvas = document.createElement('canvas');
   canvas.width = canvas.height = S;
-  const c = canvas.getContext('2d');
-  c.filter = `blur(${S * .09}px)`;
+  const c = canvas.getContext('2d', { willReadFrequently: true });
   c.fillStyle = '#fff';
   c.beginPath();
   c.roundRect(S * .24, S * .24, S * .52, S * .52, S * .12);
   c.fill();
+  // White throughout; only how solid it is softens (lib/canvasBlur: no canvas filter, which Safari before 18 ignores).
+  const image = c.getImageData(0, 0, S, S);
+  const alpha = blurPlane(channel(image, 3), S, S, S * .09);
+  for (let i = 0; i < alpha.length; i++) image.data.set([255, 255, 255, alpha[i]], i * 4);
+  c.putImageData(image, 0, 0);
   return new THREE.CanvasTexture(canvas);
 }
 

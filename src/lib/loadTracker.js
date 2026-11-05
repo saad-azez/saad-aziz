@@ -1,7 +1,7 @@
-﻿const WEIGHTS = { boot: .2, fonts: .1, media: .15, dom: .3, hero: .25 };
+const WEIGHTS = { boot: .2, fonts: .1, media: .15, dom: .3, hero: .25 };
 
-// Real readiness, with a minimum display time and a stalled-resource timeout.
-export function createLoadTracker({ minDuration = 2600, maxDuration = 14000 } = {}) {
+// Real readiness, with a stalled-resource timeout. (How long the loader stays up at the least is the loader's own business.)
+export function createLoadTracker({ minDuration = 0, maxDuration = 14000 } = {}) {
   const values = Object.fromEntries(Object.keys(WEIGHTS).map(key => [key, 0]));
   const listeners = new Set();
   const start = performance.now();

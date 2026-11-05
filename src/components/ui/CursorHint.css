@@ -45,3 +45,6 @@
 }
 .cursor-hint[data-on="false"] .cursor-hint__disc,
 .cursor-hint[data-on="false"] .cursor-hint__label { opacity: 0; scale: .3; translate: -10px -10px; transition-delay: 0s; transition-duration: .2s; }
+
+/* Not showing: its gesture's loop stands still. */
+.cursor-hint[data-on="false"] * { animation-play-state: paused; }

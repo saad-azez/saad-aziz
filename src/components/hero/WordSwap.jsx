@@ -21,8 +21,11 @@ export default function WordSwap({ words, lead, label = words[0], play, hold = 2
     let wait = null;
     let live = true;
 
-    const width = i => reserve ? Math.max(...slots.map(slot => slot.offsetWidth)) : slots[i].offsetWidth;
-    const fit = () => { if (live && !swap?.isActive()) gsap.set(stage, { width: width(index) }); };
+    // Measured when the type or the window changes, not at every swap (a read would make the browser lay out mid-animation).
+    let widths = [];
+    const measure = () => { widths = slots.map(slot => slot.offsetWidth); };
+    const width = i => (reserve ? Math.max(...widths) : widths[i]);
+    const fit = () => { if (!live) return; measure(); if (!swap?.isActive()) gsap.set(stage, { width: width(index) }); };
 
     const next = () => {
       // Covered by the work section, or the tab hidden: wait, without animating anything.

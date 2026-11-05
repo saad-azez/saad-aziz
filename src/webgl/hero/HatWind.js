@@ -3,8 +3,20 @@ import gsap from 'gsap';
 import { reducedMotion } from '../../brand/motion.js';
 import WindField, { ambientWind } from './WindField.js';
 import { viewHeight } from '../../lib/viewport.js';
+import { LITE } from '../../lib/device.js';
 
 export const hatGust = ambientWind;
+
+/** Under this the wind's lines cannot be seen (their opacity is under .005 of full): nothing is written for them. */
+const LINES_FROM = .02;
+/** The lines' own size: drawn at this and scaled, so that resizing them is no layout. Keep in step with Hero.css. */
+const LINES_W = 320;
+const LINES_H = 130;
+
+// Kept and reused: this runs every frame, and on a phone garbage collected is frames lost.
+const worldDirection = new THREE.Vector3();
+const inverse = new THREE.Quaternion();
+const point = new THREE.Vector3();
 
 /** Ambient wind moves the hat independently of mouse interaction. */
 export default class HatWind {
@@ -47,7 +59,7 @@ export default class HatWind {
     const { owner, hat, uniforms } = this;
     const flight = owner.props.hatFlight;
     if (!this.awake() || gsap.isTweening(hat.position) || gsap.isTweening(hat.rotation)) {
-      this.svg.style.opacity = '0';
+      this.showLines(0);
       this.field.clear();
       if (uniforms.uWind.value) { uniforms.uWind.value = 0; uniforms.uStorm.value = 0; owner.render(); }
       return;
@@ -62,12 +74,12 @@ export default class HatWind {
     const directionX = retainHeading ? airborne.dx : wind.directionX;
     const directionY = retainHeading ? airborne.dy : wind.directionY;
     const camera = owner.updateViewCamera?.() ?? owner.camera;
-    const worldDirection = new THREE.Vector3(directionX, directionY, 0).applyQuaternion(camera.quaternion);
-    const inverse = new THREE.Quaternion();
+    worldDirection.set(directionX, directionY, 0).applyQuaternion(camera.quaternion);
     if (!flight?.flight) {
       hat.parent.getWorldQuaternion(inverse).invert();
-      const direction = worldDirection.clone().applyQuaternion(inverse);
-      flight?.rock({ ...wind, directionX: direction.x, directionY: direction.y });
+      point.copy(worldDirection).applyQuaternion(inverse);
+      wind.directionX = point.x; wind.directionY = point.y;
+      flight?.rock(wind);
     }
     hat.updateWorldMatrix(true, false);
     hat.getWorldQuaternion(inverse).invert();
@@ -77,26 +89,36 @@ export default class HatWind {
     uniforms.uWind.value = pressure;
     uniforms.uStorm.value = THREE.MathUtils.smoothstep(pressure, .5, 1.25);
     uniforms.uWindTime.value = this.time;
-    this.svg.style.opacity = String(Math.min(.34, pressure * .24));
-    if (pressure > .005) {
-      const project = point => point.applyMatrix4(hat.matrixWorld).project(camera);
-      const centre = project(new THREE.Vector3(0, .16, 0));
-      const left = project(new THREE.Vector3(-.5, .12, 0));
-      const right = project(new THREE.Vector3(.5, .12, 0));
-      const width = Math.max(100, Math.min(400, Math.hypot((right.x - left.x) * window.innerWidth, (right.y - left.y) * viewHeight())));
-      const height = width * 130 / 320;
+    this.showLines(pressure > LINES_FROM ? Math.min(.34, pressure * .24) : 0);
+    if (pressure > LINES_FROM) {
+      const W = window.innerWidth, H = viewHeight();
+      const project = (x, y) => point.set(x, y, 0).applyMatrix4(hat.matrixWorld).project(camera);
+      project(-.5, .12);
+      const leftX = point.x, leftY = point.y;
+      project(.5, .12);
+      const width = Math.max(100, Math.min(400, Math.hypot((point.x - leftX) * W, (point.y - leftY) * H)));
+      project(0, .16);
       const desired = Math.atan2(-directionY, directionX);
       this.angle += Math.atan2(Math.sin(desired - this.angle), Math.cos(desired - this.angle)) * (1 - Math.exp(-dt * 8));
-      this.svg.style.width = `${width}px`;
-      this.svg.style.height = `${height}px`;
-      this.svg.style.transform = `translate3d(${(centre.x + 1) * window.innerWidth / 2 - width * .5}px, ${(1 - centre.y) * viewHeight() / 2 - height * .5}px, 0) rotate(${this.angle}rad)`;
+      this.svg.style.transform = `translate3d(${(point.x + 1) * W / 2 - LINES_W / 2}px, ${(1 - point.y) * H / 2 - LINES_H / 2}px, 0) rotate(${this.angle}rad) scale(${width / LINES_W})`;
       this.paths.forEach((path, i) => {
         const local = (this.time * (.24 + pressure * .3) + i * .24) % 1;
         path.style.strokeDashoffset = String(1 - local * 1.5);
         path.style.opacity = String(Math.sin(Math.PI * local) ** 2);
       });
     }
-    if (moving || pressure > .001 || was > .001) owner.render();
+    // On a phone the slow sway is drawn at half the rate (the hat moves too slowly for it to show), and the last of it always.
+    this.frame = (this.frame ?? 0) + 1;
+    const still = !moving && pressure <= .001;
+    if (still ? was > .001 : !LITE || flight?.flight || this.frame % 2 === 0) owner.render();
+  }
+
+  /** The lines' opacity, written only when it changes. */
+  showLines(opacity) {
+    const value = String(+opacity.toFixed(3));
+    if (value === this.linesShown) return;
+    this.linesShown = value;
+    this.svg.style.opacity = value;
   }
 
   reset() {
@@ -104,7 +126,7 @@ export default class HatWind {
     this.time = 0; this.angle = 0;
     this.uniforms.uWind.value = 0;
     this.uniforms.uStorm.value = 0;
-    if (this.svg) this.svg.style.opacity = '0';
+    if (this.svg) this.showLines(0);
   }
 
   dispose() {

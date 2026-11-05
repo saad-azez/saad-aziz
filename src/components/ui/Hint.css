@@ -43,6 +43,10 @@
   animation: hint-pulse 2.8s ease-out infinite;
 }
 @keyframes hint-pulse { 0% { transform: scale(1); opacity: .7; } 45%, 100% { transform: scale(1.7); opacity: 0; } }
+/* Nobody can see it: its loops stand still (off the screen, sprung out, or the work not yet come up over the hero). */
+.hint:not([data-near]) *, .hint:not([data-near]) .hint__icon::after,
+.hint[data-on="false"] *, .hint[data-on="false"] .hint__icon::after,
+.journey:not([data-phase="work"]) .hint *, .journey:not([data-phase="work"]) .hint .hint__icon::after { animation-play-state: paused; }
 .hint__label { font-size: var(--step-mono); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
 
 @media (prefers-reduced-motion: reduce) {

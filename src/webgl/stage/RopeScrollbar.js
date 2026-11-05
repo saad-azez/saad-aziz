@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { INK, ROPE_OUTLINE, ROPE_FRAGMENT } from '../hero/Props.js';
 import { reducedMotion } from '../../brand/motion.js';
 import { scrollToY } from '../../lib/smoothScroll.js';
-import { viewHeight } from '../../lib/viewport.js';
+import { viewHeight, pageHeight } from '../../lib/viewport.js';
 import { pixelRatio } from '../../lib/device.js';
 import { ropeTransition, DISSOLVE_FIELD, DISSOLVE_VERTEX, FIBER_VERTEX, FIBER_FRAGMENT } from './ropeDissolve.js';
 
@@ -180,8 +180,8 @@ export default class RopeScrollbar {
     this.lastP = p;
     const { erase, reveal, fibers } = ropeTransition(p, reducedMotion);
     const W = window.innerWidth, H = viewHeight();
-    const max = Math.max(1, document.documentElement.scrollHeight - H);
-    const size = clamp(H / document.documentElement.scrollHeight, THUMB_MIN, .45);
+    const max = Math.max(1, pageHeight() - H);
+    const size = clamp(H / pageHeight(), THUMB_MIN, .45);
     const u0 = clamp(window.scrollY / max, 0, 1) * (1 - size);
     const view = hero.word.scale.x * hero.camera.zoom;
     const dpr = pixelRatio();
@@ -277,7 +277,7 @@ export default class RopeScrollbar {
     let dragging = false;
     const scrollToThumb = u0 => {
       const size = this.thumb.u1 - this.thumb.u0;
-      const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+      const max = Math.max(1, pageHeight() - window.innerHeight);
       scrollToY(clamp(u0 / Math.max(1e-6, 1 - size), 0, 1) * max, { immediate: dragging });
     };
     el.addEventListener('pointerdown', event => {

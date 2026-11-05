@@ -24,8 +24,13 @@ export default function Hero({ reveal, animateText, onReady }) {
     scene.setVisible(false);
     scene.mount();
     scene.enableOrbit(wordRef.current);
-    readyRef.current?.();
-    return () => { sceneRef.current = null; stage.attachHero(null); scene.dispose(); };
+    // Ready once what the first screen draws is on the GPU, so none of it is compiled during the rip. (Never held
+    // for long: a slow or failed model download only means it is compiled when it first appears.)
+    let told = false;
+    const ready = () => { if (!told) { told = true; readyRef.current?.(); } };
+    scene.prepare().then(ready, ready);
+    const cap = setTimeout(ready, 6000);
+    return () => { clearTimeout(cap); sceneRef.current = null; stage.attachHero(null); scene.dispose(); };
   }, []);
 
   useEffect(() => {

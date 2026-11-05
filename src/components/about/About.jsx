@@ -81,6 +81,13 @@ const documentTop = element => {
 
 export default function About() {
   const rootRef = useRef(null);
+  // The running reviews on a phone only run while the about is near the screen (About.css).
+  useEffect(() => {
+    const root = rootRef.current;
+    const observer = new IntersectionObserver(([entry]) => root.toggleAttribute('data-near', entry.isIntersecting), { rootMargin: '50% 0px' });
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
   const pinRef = useRef(null);
   const moreRef = useRef(null);
   const [stop, setStop] = useState(0);

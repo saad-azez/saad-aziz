@@ -77,6 +77,21 @@ export function createBackdrop(palette) {
   return mesh;
 }
 
+/** The backdrop already worked out, in `texture`: copied to the screen as it is (WordmarkScene.bakeBackdrop). */
+export function createBackdropCopy(texture) {
+  return new THREE.ShaderMaterial({
+    vertexShader: BACKDROP_VERTEX,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D uBaked;
+      varying vec2 vUv;
+      void main() { gl_FragColor = vec4(texture2D(uBaked, vUv).rgb, 1.0); }
+    `,
+    depthTest: false,
+    depthWrite: false,
+    uniforms: { uBaked: { value: texture } },
+  });
+}
+
 /** Re-colour a backdrop from a (possibly changed) palette. */
 export function paintBackdrop(material, palette) {
   material.uniforms.uGround.value.set(palette.ground);

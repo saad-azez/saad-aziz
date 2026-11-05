@@ -13,6 +13,14 @@
  */
 let full = null;
 let small = null;
+/**
+ * The two heights, read once and kept until the window is resized: they are asked for every frame, and reading
+ * an element's size makes the browser finish any layout it has pending. (Neither moves with the bars.)
+ */
+let fullHeight = 0;
+let smallHeight = 0;
+let pageHeightNow = 0;
+if (typeof window !== 'undefined') window.addEventListener('resize', () => { fullHeight = smallHeight = pageHeightNow = 0; }, { passive: true });
 
 function probe(height) {
   const el = document.createElement('div');
@@ -25,11 +33,24 @@ function probe(height) {
 /** The full screen height (px): CSS 100vh. */
 export function viewHeight() {
   full ??= probe('100vh');
-  return full.offsetHeight || window.innerHeight;
+  if (!fullHeight) fullHeight = full.offsetHeight;
+  return fullHeight || window.innerHeight;
 }
 
 /** How much of the bottom of that the browser's bars can cover (px): CSS 100vh - 100svh. */
 export function barInset() {
   small ??= probe('100svh');
-  return Math.max(0, viewHeight() - (small.offsetHeight || viewHeight()));
+  if (!smallHeight) smallHeight = small.offsetHeight;
+  return Math.max(0, viewHeight() - (smallHeight || viewHeight()));
+}
+
+/** The page's whole height (px), kept current without reading it every frame. */
+let pageWatch = null;
+export function pageHeight() {
+  if (!pageWatch && typeof ResizeObserver !== 'undefined') {
+    pageWatch = new ResizeObserver(() => { pageHeightNow = 0; });
+    pageWatch.observe(document.documentElement);
+  }
+  if (!pageHeightNow) pageHeightNow = document.documentElement.scrollHeight;
+  return pageHeightNow;
 }

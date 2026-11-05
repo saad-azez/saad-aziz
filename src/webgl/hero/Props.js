@@ -8,6 +8,7 @@ import ropeUrl from '../../assets/3D/rope.glb?url';
 import { fitHatToLetter } from './hatFit.js';
 import HatWind from './HatWind.js';
 import HatFlight from './HatFlight.js';
+import { perf } from '../../lib/perf.js';
 
 /**
  * The props on the wordmark: the straw hat on the S, and the rope hung
@@ -372,16 +373,28 @@ export default class Props {
     this.shapes = new Map();
     this.wordShapes = new Map();
     const loader = new GLTFLoader();
+    // Both models in (or failed), and the rope built though still hidden, so that both can be compiled while the
+    // loader is still up: built at the reveal instead, they stalled the rip on a phone (WordmarkScene.prepare).
+    let hatDone, ropeDone;
+    this.loaded = Promise.all([new Promise(r => { hatDone = r; }), new Promise(r => { ropeDone = r; })]).then(() => {
+      if (!this.disposed && !this.rope && this.ropeSource) this.buildRope();
+    });
     loader.load(hatUrl, gltf => {
-      if (this.disposed) return;
-      this.buildHat(gltf);
-      if (this.owner.atRest) this.reveal({ instant: reducedMotion, hatInstant: this.owner.instant });
-    }, undefined, () => {});
+      if (!this.disposed) {
+        perf.model('straw hat (straw_hat.glb)', gltf.scene);
+        this.buildHat(gltf);
+        if (this.owner.atRest) this.reveal({ instant: reducedMotion, hatInstant: this.owner.instant });
+      }
+      hatDone();
+    }, undefined, () => hatDone());
     loader.load(ropeUrl, gltf => {
-      if (this.disposed) return;
-      this.ropeSource = gltf.scene.getObjectByProperty('isMesh', true)?.geometry ?? null;
-      if (this.owner.atRest) this.reveal({ instant: reducedMotion, hatInstant: this.owner.instant });
-    }, undefined, () => {});
+      if (!this.disposed) {
+        perf.model('rope (rope.glb)', gltf.scene);
+        this.ropeSource = gltf.scene.getObjectByProperty('isMesh', true)?.geometry ?? null;
+        if (this.owner.atRest) this.reveal({ instant: reducedMotion, hatInstant: this.owner.instant });
+      }
+      ropeDone();
+    }, undefined, () => ropeDone());
   }
 
   /* ----- the hat ----------------------------------------------------- */
@@ -434,8 +447,11 @@ export default class Props {
     this.hatRestTurn = hat.rotation.z;
     this.hatContact = contact;
     this.hatFlight = new HatFlight(this);
+    // Its other seats and the shade under each, made now, with the rest of what is compiled behind the loader
+    // (WordmarkScene.prepare): made at the first take-off, they stalled the frame just as the hat lifted.
     this.addHatContactShade(body, contact);
     this.hatWind = new HatWind(this.owner, hat, mesh.material.uniforms);
+    this.hatFlight.prepare();
   }
 
   /** A soft contact shade on the S; palette uniforms stay shared with the word. */

@@ -34,8 +34,10 @@ const element = () => ({ style: {}, namespaceURI: 'http://www.w3.org/2000/svg', 
 const surface = { append() {}, addEventListener(name, callback) { listeners.set(name, callback); }, removeEventListener(name) { listeners.delete(name); } };
 const document = { hidden: false, createElementNS: element };
 const code = (await fs.readFile('src/webgl/hero/HatWind.js', 'utf8')).replace(/^import .*;\r?\n/gm, '').replace('export const ', 'const ').replace('export default class ', 'class ');
-const Wind = vm.runInNewContext(`${code}\nHatWind`, { THREE, WindField, ambientWind, document,
-  window: { innerWidth: 1000, innerHeight: 800 }, reducedMotion: false,
+// What HatWind.js imports, as the sandbox has it (its import lines are stripped above).
+const imports = { THREE, WindField, ambientWind, reducedMotion: false, LITE: false, viewHeight: () => 800 };
+const Wind = vm.runInNewContext(`${code}\nHatWind`, { ...imports, document,
+  window: { innerWidth: 1000, innerHeight: 800 },
   gsap: { isTweening: () => false, ticker: { add: f => tickers.add(f), remove: f => tickers.delete(f) } } });
 const word = new THREE.Group(), letters = Array.from({ length: 4 }, () => new THREE.Group());
 letters.forEach((letter, i) => { letter.position.x = i * 60; word.add(letter); });
@@ -79,7 +81,7 @@ try {
   wind.dispose(); mesh.geometry.dispose(); mesh.material.dispose();
 }
 assert.equal(listeners.size, 0); assert.equal(tickers.size, 0); assert.equal(wind.svg.removed, true);
-const QuietWind = vm.runInNewContext(`${code}\nHatWind`, { WindField, ambientWind, reducedMotion: true });
+const QuietWind = vm.runInNewContext(`${code}\nHatWind`, { ...imports, reducedMotion: true });
 const quiet = new QuietWind(owner, hat, uniforms); quiet.dispose();
 assert.equal(quiet.svg, undefined); assert.equal(listeners.size, 0);
 console.log('Wind: mouse reactions disabled, ambient gusts/landing, fixed contact, pause, reduced motion and cleanup passed.');

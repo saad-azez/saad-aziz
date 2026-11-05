@@ -144,42 +144,21 @@ custom code.
 
 ---
 
-## Building the loader in Webflow
+## The loader
 
-The loader is a WebGL canvas with a single piece of DOM on top of it. Almost all
-of it is script, not structure — so do not try to rebuild the animation with
-Interactions. Build this much:
+The loader is script, not structure: **build nothing for it in Webflow.** It puts
+itself on the page (`src/components/loader/startLoader.js`) before the rest of
+the site has been fetched, so the first file a visitor downloads is small and
+the smile is on screen at once.
 
-```
-Section  .loader                 Div Block, fixed, full-bleed
-├── Embed  .loader__canvas       <canvas class="loader__canvas"></canvas>
-└── Div    .loader__readout      absolute, bottom right
-    ├── Text  .loader__count     "099"
-    └── Text  .loader__unit      "%"
-```
+It draws in its own thread (a Web Worker with an OffscreenCanvas), so nothing the
+page does while it gets ready can make it stutter. The worker is inlined as a
+blob, because a page cannot start a worker from another domain, and on Webflow
+the site's files are served from one. Where a browser has no OffscreenCanvas, the
+same scene runs on the main thread; with no WebGL at all, a plain cover fades away.
 
-Then add the built bundle from `npm run build` as a site-wide custom code
-embed before `</body>`. The script finds the canvas, drives the count, and runs
-its own exit — no Webflow Interaction is involved at any point.
-
-### Properties the Designer cannot set
-
-These have to go in a custom-code embed. They are few, and all are on the
-loader:
-
-| Property | Where | Why it matters |
-| --- | --- | --- |
-| `clip-path` | `.loader` | The exit wipe |
-| `will-change` | `.loader`, `.loader__readout` | Keeps the exit off the main thread |
-| `font-variant-numeric: tabular-nums` | `.loader__count` | Stops the number jittering as digits change width |
-| `font-feature-settings: 'tnum' 1` | `.loader__count` | Same, for faces that need the explicit flag |
-| `calc()` in the bottom offset | `.loader__readout` | Optical alignment of the count's baseline |
-| `100svh` | `.site-shell` | `svh` accounts for mobile browser chrome; `vh` does not |
-| `clamp()` sizes | type scale | Webflow's numeric fields do not take CSS functions |
-
-The simplest route: paste the contents of `Loader.css` into one site-wide embed
-and let it override the Designer classes. Keep the class names identical and
-nothing fights.
+The rip needs no picture of the page. The sheet really is lying on top of the live
+page, so where it tears (transparent, in `paper.glsl.js`) the page shows through.
 
 ---
 
@@ -190,11 +169,11 @@ Section  .hero                          relative, min-height 100svh, overflow hi
 ├── H1     .hero__title                 visually hidden
 ├── Embed  .hero__canvas                <canvas>, absolute, 100% × 100svh
 └── Div    .hero__frame                 grid, three rows, padded --frame-inset
-    ├── Header .hero__top               grid: 1fr | auto | 1fr, centre-aligned
+    ├── Header .hero__top               grid: 1fr | auto | 1fr, centre-aligned; scrolls away with the page (.site-header)
     │   ├── Link .hero__mark            the SA monogram, a coin: perspective 240px
     │   │   ├── Embed .hero__mark-letters   src/assets/monogram-letters.svg, currentColor, absolute
     │   │   └── Embed .hero__mark-ring      src/assets/monogram-ring.svg — spun rotateY by script under the pointer
-    │   ├── Para .hero__meta.hero__meta--centre   "Karachi · 17:16 local" (.hero__clock inside)
+    │   (the clock, .hero__meta.hero__clock, is not in this row: it stays on the screen in .site-clock, SiteHeader.css)
     │   └── Div  .hero__rule.hero__rule--top      hairline, drawn in by script
     ├── Div    .hero__word              empty, min-height 30svh — the word is centred in it
     └── Footer .hero__bottom            grid: 1.1fr | auto | 1fr, bottom-aligned

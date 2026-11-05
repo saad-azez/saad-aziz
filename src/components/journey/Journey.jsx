@@ -36,6 +36,15 @@ export default function Journey({ reveal, animateText, onReady }) {
     // element (the whole work, for the reveals). So the window is set straight on its elements, and each value goes
     // only when it changes: the reveals as custom properties the work's CSS reads, the window and its rim as styles.
     const workNode = root.querySelector('.work'), rimNode = root.querySelector('.journey__lens');
+    const headerBlock = root.querySelector('.work__header'), introBlock = root.querySelector('.work__intro');
+    // How far the project's details have come in. Written on the project on show alone, and again when another comes round.
+    let detailsNow = '0.00000';
+    const paintDetails = () => {
+      const active = root.querySelector('.work__project[data-active="true"]');
+      if (active) setStyles(active, { '--details-reveal': detailsNow });
+    };
+    const projectsWatch = new MutationObserver(paintDetails);
+    projectsWatch.observe(workNode, { subtree: true, attributes: true, attributeFilter: ['data-active'] });
     const written = new WeakMap();
     const setStyles = (node, styles) => {
       const seen = written.get(node) ?? {};
@@ -47,13 +56,16 @@ export default function Journey({ reveal, animateText, onReady }) {
       }
     };
     const setInert = (node, inert) => { if (node.inert !== inert) node.inert = inert; };
-    const onTransition = ({ work, title, names, details, intro = 0, leave = 0, lens = 0, lensX = 0, lensY = 0, lensR = 0 }) => {
-      setStyles(workNode, {
-        '--work-reveal': work.toFixed(5), '--title-reveal': title.toFixed(5), '--names-reveal': names.toFixed(5),
-        '--details-reveal': details.toFixed(5), '--intro-reveal': intro.toFixed(5), '--leave-reveal': leave.toFixed(5),
-        // The window the coin opens (the work is clipped to it), and its hairline, gone as it fills the screen.
-        clipPath: `circle(${lensR.toFixed(1)}px at ${lensX.toFixed(1)}px ${lensY.toFixed(1)}px)`,
-      });
+    const onTransition = ({ title, names, details, intro = 0, leave = 0, lens = 0, lensX = 0, lensY = 0, lensR = 0 }) => {
+      // Each reveal on the block that reads it, not on the whole work: written there, it restyled 1,300 elements a
+      // frame on its way across. (--names-reveal stays on its own elements: Journey.css @property.)
+      setStyles(headerBlock, { '--title-reveal': title.toFixed(5) });
+      setStyles(introBlock, { '--intro-reveal': intro.toFixed(5), '--leave-reveal': leave.toFixed(5) });
+      root.querySelectorAll('.work__copy, .work__lead').forEach(node => setStyles(node, { '--names-reveal': names.toFixed(5) }));
+      detailsNow = details.toFixed(5);
+      paintDetails();
+      // The window the coin opens (the work is clipped to it), and its hairline, gone as it fills the screen.
+      setStyles(workNode, { clipPath: `circle(${lensR.toFixed(1)}px at ${lensX.toFixed(1)}px ${lensY.toFixed(1)}px)` });
       setStyles(rimNode, {
         width: `${(lensR * 2).toFixed(1)}px`, height: `${(lensR * 2).toFixed(1)}px`,
         transform: `translate(${(lensX - lensR).toFixed(1)}px, ${(lensY - lensR).toFixed(1)}px)`,
@@ -141,6 +153,7 @@ export default function Journey({ reveal, animateText, onReady }) {
     return () => {
       root.removeEventListener('work:layout', measure);
       observer.disconnect();
+      projectsWatch.disconnect();
       window.removeEventListener('resize', measure);
     };
   }, [projects]);

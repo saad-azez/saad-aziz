@@ -58,6 +58,10 @@ The smile stays at its original size and is cleared by that same opening.
 The simplified drawing has no tongue, mouth fill, or rotation.
 Reduced motion uses a short fade. The loader has no dot or other 3D object.
 
+The star no longer opens a clean window: it goes through the sheet. Its four points run as tear lines to the
+edges of the screen, and the paper tears open along a single fine ink outline, onto the live page underneath. All of it is
+drawn in its own thread (`src/components/loader/`), so nothing the page does while it loads can make it stutter.
+
 The plain word is already still when the star reveals it. After the loader
 clears, D switches to `</>`, the first A becomes a slash that tucks behind S,
 the second A becomes `{}`, and i becomes `>_`. S changes to a rounded brushed-metal

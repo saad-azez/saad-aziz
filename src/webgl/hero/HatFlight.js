@@ -11,6 +11,11 @@ export const HAT_SEATS = [
 
 const smooth = t => { t = THREE.MathUtils.clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 const pivot = new THREE.Vector3(0, .19, 0);
+// Kept and reused: these run every frame of a gust or a flight, and on a phone garbage collected is frames lost.
+const tempA = new THREE.Vector3();
+const tempB = new THREE.Vector3();
+const tempQuat = new THREE.Quaternion();
+const tempEuler = new THREE.Euler();
 
 /** Land on measured surfaces; all airborne turns pivot around the hat's centre. */
 export default class HatFlight {
@@ -82,9 +87,10 @@ export default class HatFlight {
     this.intensity = (flight.power ?? .65) * (phase < end ? 1 : Math.exp(-(phase - end) * 3));
     if (phase < anticipation) {
       // Brim pressure provides the anticipation while the crown keeps its seat.
-      this.hat.quaternion.copy(flight.launch ?? new THREE.Quaternion().setFromEuler(source.rotation))
-        .slerp(new THREE.Quaternion().setFromEuler(source.rotation), smooth(phase / anticipation));
-      p.copy(source.contact).sub(source.anchor.clone().multiply(this.hat.scale).applyQuaternion(this.hat.quaternion));
+      tempQuat.setFromEuler(source.rotation);
+      if (flight.launch) this.hat.quaternion.copy(flight.launch); else this.hat.quaternion.copy(tempQuat);
+      this.hat.quaternion.slerp(tempQuat, smooth(phase / anticipation));
+      p.copy(source.contact).sub(tempA.copy(source.anchor).multiply(this.hat.scale).applyQuaternion(this.hat.quaternion));
     } else if (phase < end) {
       const t = (phase - anticipation) / duration;
       const travel = smooth(t), turn = smooth((t - .22) / .56);
@@ -94,14 +100,14 @@ export default class HatFlight {
         THREE.MathUtils.lerp(source.rotation.y, target.rotation.y, travel) + Math.sin(Math.PI * t * 2) * .16,
         THREE.MathUtils.lerp(source.rotation.z, target.rotation.z, travel) - Math.sin(Math.PI * t * 2) * .18 * (flight.dx ?? 1),
       );
-      const centre = pivot.clone().multiply(this.hat.scale).applyEuler(source.rotation).add(source.position);
-      const arrival = pivot.clone().multiply(this.hat.scale).applyEuler(target.rotation).add(target.position);
+      const centre = tempA.copy(pivot).multiply(this.hat.scale).applyEuler(source.rotation).add(source.position);
+      const arrival = tempB.copy(pivot).multiply(this.hat.scale).applyEuler(target.rotation).add(target.position);
       centre.lerp(arrival, travel);
       centre.y += envelope * lift;
       centre.z += envelope * (flip ? 12 : 7);
       // A vertical gust still has a little sideways personality, but always returns.
       if (flight.from === flight.to) centre.x += Math.sin(Math.PI * t * 2) * 3 * (flight.dx ?? .3);
-      p.copy(centre).sub(pivot.clone().multiply(this.hat.scale).applyEuler(r));
+      p.copy(centre).sub(tempB.copy(pivot).multiply(this.hat.scale).applyEuler(r));
     } else {
       const t = phase - end;
       p.copy(target.position);
@@ -123,13 +129,13 @@ export default class HatFlight {
   rock(wind) {
     if (this.flight) return;
     const spot = this.spots[this.current];
-    const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+    tempQuat.setFromEuler(tempEuler.set(
       wind.directionY * wind.pressure * .012,
       0,
       -wind.directionX * wind.pressure * .015,
     ));
-    this.hat.quaternion.setFromEuler(spot.rotation).multiply(tilt);
-    this.hat.position.copy(spot.contact).sub(spot.anchor.clone().multiply(this.hat.scale).applyQuaternion(this.hat.quaternion));
+    this.hat.quaternion.setFromEuler(spot.rotation).multiply(tempQuat);
+    this.hat.position.copy(spot.contact).sub(tempA.copy(spot.anchor).multiply(this.hat.scale).applyQuaternion(this.hat.quaternion));
     this.props.hatMesh.material.uniforms?.uHatAnchor?.value.copy(spot.anchor);
   }
 

@@ -3,6 +3,8 @@ import gsap from 'gsap';
 import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { SIGNATURE_PATHS } from './signature.paths.js';
 import { paintSolid } from './materials.js';
+import { blurPlane, channel } from '../../lib/canvasBlur.js';
+import { adaptiveShapes } from './adaptiveShapes.js';
 
 const smooth = (a, b, t) => {
   const p = THREE.MathUtils.clamp((t - a) / (b - a), 0, 1);
@@ -180,7 +182,7 @@ export default class SignatureSequence {
     const margin = 20, width = dBox.max.x - dBox.min.x + margin * 2;
     const height = dBox.max.y - dBox.min.y + margin * 2;
     this.dGlowSize = { width, height };
-    const mask = this.dMask.getContext('2d'); mask.fillStyle = '#fff';
+    const mask = this.dMask.getContext('2d', { willReadFrequently: true }); mask.fillStyle = '#fff';
     const positions = bodies[3].geometry.attributes.position, normals = bodies[3].geometry.attributes.normal;
     mask.beginPath();
     for (let n = 0; n < positions.count; n += 3) {
@@ -245,10 +247,14 @@ export default class SignatureSequence {
     this.paintPalette();
     this.reset();
     const rate = 180;
+    // Only where the letters go is wanted here, so the fills' masks are not drawn: 523 passes of them were 140,000
+    // canvas calls, which kept the page (and the downloads it was waiting for) stuck for seconds under the loader.
+    this.measuring = true;
     const raw = Array.from({ length: Math.ceil(2.9 * rate) + 1 }, (_, i) => {
       this.paint(i / rate);
       return letters.map(letter => letter.position.x);
     });
+    this.measuring = false;
     this.layoutRate = rate;
     this.layoutTrack = raw.map((row, i) => row.map((_, letter) => {
       let total = 0, weight = 0;
@@ -260,15 +266,11 @@ export default class SignatureSequence {
       return total / weight;
     }));
     this.reset();
-
-    // Compile every variant before the loader reports WebGL ready.
-    this.layers.forEach(layer => layer.traverse(obj => { obj.visible = true; }));
-    renderer.compile(owner.scene, owner.camera);
-    this.reset();
+    // Every variant is compiled before the loader is told the page is ready, gently: WordmarkScene.prepare.
   }
 
   createFirstAWriting(body) {
-    const lowerGeometry = new THREE.ExtrudeGeometry(this.owner.font.generateShapes('a', 70), {
+    const lowerGeometry = new THREE.ExtrudeGeometry(adaptiveShapes(this.owner.font.generateShapes('a', 70)), {
       depth: 5, bevelEnabled: true, bevelThickness: .45, bevelSize: .06,
       bevelSegments: 3, curveSegments: 36,
     });
@@ -336,6 +338,7 @@ export default class SignatureSequence {
   }
 
   revealFilledLetter(mesh, progress, opacity=1) {
+    if (this.measuring) return;
     mesh.material.uniforms.uOpacity.value=opacity;
     const state=mesh.userData.reveal;
     if (state.last===progress) return;
@@ -374,17 +377,21 @@ export default class SignatureSequence {
   }
 
   updateGlow() {
-    const ctx = this.dGlowCanvas.getContext('2d');
-    ctx.clearRect(0, 0, 512, 512);
+    const ctx = this.dGlowCanvas.getContext('2d', { willReadFrequently: true });
     const radius = this.dSettings.softness * 512 / this.dGlowSize.height;
-    // A broad falloff plus a tighter luminous rim remains legible in motion.
-    ctx.globalAlpha = .65;
-    ctx.filter = `blur(${radius * 1.8}px)`;
-    ctx.drawImage(this.dMask, 0, 0);
-    ctx.globalAlpha = 1;
-    ctx.filter = `blur(${radius * .55}px)`;
-    ctx.drawImage(this.dMask, 0, 0);
-    ctx.filter = 'none';
+    // A broad falloff plus a tighter luminous rim remains legible in motion: the mask blurred twice, the broad one at
+    // .65 under the tight one. (In lib/canvasBlur, not a canvas filter: that stalled Chrome while the page loaded,
+    // and Safari before 18 ignores it.)
+    const mask = this.dMask.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, 512, 512);
+    const broad = blurPlane(channel(mask, 3), 512, 512, radius * 1.8);
+    const tight = blurPlane(channel(mask, 3), 512, 512, radius * .55);
+    const glow = ctx.createImageData(512, 512), data = glow.data;
+    for (let i = 0; i < tight.length; i++) {
+      const a = broad[i] / 255 * .65, b = tight[i] / 255;
+      data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = 255;
+      data[i * 4 + 3] = (b + a * (1 - b)) * 255;
+    }
+    ctx.putImageData(glow, 0, 0);
     this.dGlowTexture.needsUpdate = true;
   }
 

@@ -5,7 +5,7 @@ import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import typeface from './saadi.typeface.json';
 import { WORDMARK } from './wordmark.paths.js';
 import { createSolidMaterial, paintSolid } from './materials.js';
-import { createBackdrop, paintBackdrop } from '../backdrop.js';
+import { createBackdrop, createBackdropCopy, paintBackdrop } from '../backdrop.js';
 import { brandPalette, onSchemeChange } from '../../brand/palette.js';
 import { reducedMotion } from '../../brand/motion.js';
 import SignatureSequence from './SignatureSequence.js';
@@ -16,6 +16,9 @@ import WordmarkParallax from './WordmarkParallax.js';
 import { INTRO, markIntroSeen } from '../../brand/intro.js';
 import { viewHeight } from '../../lib/viewport.js';
 import { pixelRatio } from '../../lib/device.js';
+import { warmGently } from '../gpuWork.js';
+import { adaptiveShapes } from './adaptiveShapes.js';
+import { perf } from '../../lib/perf.js';
 
 const REST_TURN = 0;
 /** How far the camera stands from the word's centre. */
@@ -31,12 +34,15 @@ export default class WordmarkScene {
     this.palette = brandPalette();
     this.handleResize = this.handleResize.bind(this);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    perf.renderer('hero', this.renderer);
     this.renderer.setPixelRatio(pixelRatio());
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.scene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 2000);
     this.camera.position.z = 600;
     this.backdrop = createBackdrop(this.palette);
+    this.backdropSource = this.backdrop.material;
+    this.flushDraw = () => { this.drawQueued = false; this.draw(); };
     this.scene.add(this.backdrop);
     this.material = createSolidMaterial(this.palette);
     this.word = new THREE.Group();
@@ -70,9 +76,11 @@ export default class WordmarkScene {
         glyph.add(this.dot);
         shapes.splice(dotIndex, 1);
       }
-      const geometry = new THREE.ExtrudeGeometry(shapes, {
+      // Each curve cut only as finely as its bend needs (never more than the 36 pieces it had): a third fewer triangles,
+      // the same outline and shading (adaptiveShapes).
+      const geometry = new THREE.ExtrudeGeometry(adaptiveShapes(shapes), {
         depth: 5, bevelEnabled: true, bevelThickness: .45,
-        bevelSize: .06, bevelSegments: 3, curveSegments: 36,
+        bevelSize: .06, bevelSegments: 3,
       });
       // Font contours already use upward Y; center the extrusion on Z.
       geometry.translate(0, 0, -2.5);
@@ -142,7 +150,7 @@ export default class WordmarkScene {
     this.stopScheme = onSchemeChange(() => {
       this.palette = brandPalette();
       paintSolid(this.material, this.palette);
-      paintBackdrop(this.backdrop.material, this.palette);
+      paintBackdrop(this.backdropSource, this.palette);
       this.sequence.paintPalette();
       this.skillCoin.paint();
       this.render();
@@ -152,6 +160,19 @@ export default class WordmarkScene {
   mount() {
     window.addEventListener('resize', this.handleResize);
     this.handleResize();
+  }
+
+  /**
+   * Everything the first screen will draw, compiled and uploaded while the loader is still up, a piece a frame
+   * (gpuWork.js): the word in every state of its entrance, the hat and the rope (once their models are in), and the
+   * stage's rope that takes over from it. Resolves when done; the loader is told the page is ready after that.
+   */
+  async prepare() {
+    await this.props.loaded;
+    // A frame for the stage to pick up the rope (RopeScrollbar.adopt queues its own compiling, ahead of this).
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    if (this.disposed) return;
+    await warmGently(this.renderer, this.scene, this.updateViewCamera());
   }
 
   /**
@@ -249,6 +270,8 @@ export default class WordmarkScene {
    */
   setOffstage(offstage) {
     this.offstage = offstage;
+    // Nor does the browser need to composite it under what covers it.
+    this.renderer.domElement.style.visibility = offstage ? 'hidden' : '';
   }
 
   /** Zoom about the word's centre, within reason. */
@@ -337,7 +360,7 @@ export default class WordmarkScene {
     // (Put away by the stage while something covers the screen: DotStage suspend brings it back.)
     if (this.suspended) return;
     this.renderer.setSize(width, height, false);
-    this.backdrop.material.uniforms.uAspect.value = width / height;
+    this.backdropSource.uniforms.uAspect.value = width / height;
 
     const size = this.extents.getSize(new THREE.Vector3());
     const band = this.band ?? { top: 0, bottom: height, left: 0, right: width };
@@ -364,7 +387,7 @@ export default class WordmarkScene {
     this.camera.lookAt(this.word.position);
     this.camera.updateProjectionMatrix();
     if (this.controls) { this.controls.target.copy(this.word.position); this.controls.update(); }
-    this.render();
+    this.renderNow();
   }
 
   /**
@@ -395,9 +418,54 @@ export default class WordmarkScene {
     return this.viewCamera = this.parallax.update(this.controls?.target ?? this.word.position);
   }
 
+  /**
+   * Ask for the scene to be drawn: once, at the end of this frame, however many things moved in it. (The entrance's
+   * tweens each asked for their own, up to four draws of the whole scene a frame, of which only the last was seen.)
+   */
   render() {
+    if (this.drawQueued || this.disposed) return;
+    this.drawQueued = true;
+    gsap.ticker.add(this.flushDraw, true);
+  }
+
+  /** Draw now: for a canvas just resized (which is blank until drawn, and could be shown so). */
+  renderNow() {
+    if (this.drawQueued) { gsap.ticker.remove(this.flushDraw); this.drawQueued = false; }
+    this.draw();
+  }
+
+  /**
+   * The backdrop never changes between draws, so it is worked out once at the canvas's exact size, and after that
+   * each draw copies it pixel for pixel: one texture read a pixel, not its gradient and grain. Again when the size or
+   * the scheme changes (`backdropKey`).
+   */
+  bakeBackdrop() {
+    const { renderer, backdrop } = this;
+    const size = renderer.getDrawingBufferSize(this._buffer ??= new THREE.Vector2());
+    const key = `${size.x}|${size.y}|${this.palette.ground}|${this.palette.groundGlow}|${this.palette.groundEdge}`;
+    if (key === this.backdropKey) return;
+    this.backdropKey = key;
+    this.bakedBackdrop ??= new THREE.WebGLRenderTarget(size.x, size.y, {
+      depthBuffer: false, generateMipmaps: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+    });
+    this.bakedBackdrop.setSize(size.x, size.y);
+    this.backdropCopy ??= createBackdropCopy(this.bakedBackdrop.texture);
+    this.backdropScene ??= new THREE.Scene();
+    const bake = new THREE.Mesh(backdrop.geometry, this.backdropSource);
+    bake.frustumCulled = false;
+    this.backdropScene.clear();
+    this.backdropScene.add(bake);
+    const target = renderer.getRenderTarget();
+    renderer.setRenderTarget(this.bakedBackdrop);
+    renderer.render(this.backdropScene, this.camera);
+    renderer.setRenderTarget(target);
+    backdrop.material = this.backdropCopy;
+  }
+
+  draw() {
     // (Not while the stage has put the drawing away: DotStage suspend.)
     if (this.disposed || this.renderer.getSize(this._size ??= new THREE.Vector2()).x <= 1) return;
+    this.bakeBackdrop();
     this.props?.updateHatShade();
     this.renderCount = (this.renderCount ?? 0) + 1;
     this.liquidDot?.syncVisibility();
@@ -431,8 +499,11 @@ export default class WordmarkScene {
     this.word.traverse(object => { object.geometry?.dispose(); });
     this.sequence.dispose();
     this.material.dispose();
+    gsap.ticker.remove(this.flushDraw);
     this.backdrop.geometry.dispose();
-    this.backdrop.material.dispose();
+    this.backdropSource.dispose();
+    this.backdropCopy?.dispose();
+    this.bakedBackdrop?.dispose();
     this.renderer.dispose();
   }
 }

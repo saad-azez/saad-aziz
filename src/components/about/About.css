@@ -266,6 +266,7 @@
   .about__said { top: -54px; left: calc(50% - 50vw); display: flex; gap: 10px; width: max-content; height: auto; margin: 0; padding: 0 16px;
     overflow: visible; clip-path: none;
     animation: about-ticker 28s linear infinite alternate; }
+  .about:not([data-near]) .about__said { animation-play-state: paused; }
   .about__coin { margin-bottom: 0; }
   .about__hint { left: 50%; top: calc(100% - 14px); translate: -50% 0; }
   .about__saying { --t: clamp(0, calc(var(--about-lede) * 3.4 - var(--i) * .38), 1); padding: 7px 11px 6px; opacity: var(--t); }

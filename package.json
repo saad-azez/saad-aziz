@@ -14,6 +14,8 @@
     "preview": "vite preview",
     "serve": "vite build && vite preview --host --port 4173",
     "wordmark": "node scripts/build-wordmark.mjs",
+    "loader:glyphs": "node scripts/build-loader-glyphs.mjs",
+    "coin:marks": "node scripts/build-coin-marks.mjs",
     "font": "python scripts/build-saadi-font.py && node scripts/build-wordmark.mjs",
     "previews": "node scripts/capture-previews.mjs",
     "check:frames": "node scripts/check-frames.mjs",
@@ -30,6 +32,7 @@
     "three": "^0.185.1"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@vitejs/plugin-react": "^4.3.4",
     "opentype.js": "^2.0.0",
     "vite": "^6.0.5"

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { STICKER_VERTEX, STICKER_FRAGMENT } from '../bookShaders.js';
-import { drawSticker, stickerImages } from './stickerArt.js';
+import { blankSticker, drawSticker, stickerImages } from './stickerArt.js';
+import { afterLoader } from '../../gpuWork.js';
 import { reducedMotion } from '../../../brand/motion.js';
 
 /**
@@ -120,7 +121,8 @@ export default class Stickers {
     const saved = load();
     const across = board.x1 - board.x0;
     list.forEach(spec => {
-      const art = drawSticker(spec);
+      // Blank for now: they are drawn once the loader has gone (below). The book is not on the first screen.
+      const art = blankSticker(spec);
       const map = new THREE.CanvasTexture(art.colour);
       map.colorSpace = THREE.SRGBColorSpace;
       map.anisotropy = 8;
@@ -183,15 +185,17 @@ export default class Stickers {
       this.attach(item);
       this.items.push(item);
     });
-    // Drawn again once the portrait, the marks and the fonts are in.
-    stickerImages().then(() => {
+    // Drawn once the portrait, the marks and the fonts are in, and the loader has gone (drawing them is a moment's
+    // work on the main thread that the page's start does not need).
+    stickerImages().then(() => afterLoader(() => {
+      if (this.disposed) return;
       this.items.forEach(item => {
         item.art = drawSticker(item.spec, { colour: item.art.colour, finish: item.art.finish });
         item.map.needsUpdate = true;
         item.skin.needsUpdate = true;
       });
       this.onChange?.();
-    });
+    }, 'stickers'));
   }
 
   /**
@@ -611,6 +615,7 @@ export default class Stickers {
   }
 
   dispose() {
+    this.disposed = true;
     this.items.forEach(item => {
       item.mesh.parent?.remove(item.mesh);
       item.shadow.parent?.remove(item.shadow);

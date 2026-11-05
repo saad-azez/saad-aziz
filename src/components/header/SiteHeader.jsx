@@ -1,47 +1,19 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { EASE, reducedMotion } from '../../brand/motion.js';
 import SketchClock from '../hero/SketchClock.jsx';
 import RingButton from '../ui/RingButton.jsx';
 import { sectionLink } from '../../lib/sectionLink.js';
-import { PERSON, ABOUT, CONTACT } from '../../content/site.js';
+import { PERSON } from '../../content/site.js';
 import ring from '../../assets/monogram-ring.svg?raw';
 import letters from '../../assets/monogram-letters.svg?raw';
 import './SiteHeader.css';
 
-/** The chapters, as the header names them while the reader is in one (none over the hero itself). */
-const CHAPTERS = {
-  work: { index: '01', label: 'Work' },
-  about: { index: ABOUT.index, label: ABOUT.label },
-  contact: { index: CONTACT.index, label: CONTACT.label },
-};
-
 /**
- * Where the reader is, at this scroll: the chapter (null over the hero), and
- * whether the header is over a pinned screen (the journey's, the about's, the process's),
- * whose own layout leaves the header its room, or over the page's own flow,
- * which runs on under it (then it has a ground of its own to be read on).
- */
-function whereAt(scroll, vh) {
-  const journey = document.querySelector('.journey'), about = document.querySelector('.about'), process = document.querySelector('.process'), contact = document.querySelector('.contact');
-  if (!journey) return { chapter: null, pinned: true };
-  const top = node => node.getBoundingClientRect().top + scroll;
-  const middle = scroll + vh / 2;
-  let chapter = null;
-  if (contact && middle >= top(contact)) chapter = 'contact';
-  else if (about && middle >= top(about)) chapter = 'about';
-  else if (journey.dataset.phase === 'work') chapter = 'work';
-  const pinnedIn = node => node && scroll >= top(node) - 1 && scroll <= top(node) + node.offsetHeight - vh + 1;
-  return { chapter, pinned: scroll <= top(journey) + journey.offsetHeight - vh + 1 || pinnedIn(about) || pinnedIn(process) };
-}
-
-/**
- * The site's header: the mark, the clock (which is the navigation) and the one
- * call to action, fixed at the top of the screen over every chapter, so the
- * clock is always there. It was the hero's own header; the hero keeps a spacer
- * its size (.hero__top--spacer), so the layout under it, and everything the
- * journey measures from it, is as it was. Beside the mark, the chapter the
- * reader is in.
+ * The site's header: the mark, the call to action and the line under them, at the top of the page, scrolling away
+ * with it; and the clock, which is the navigation, in a layer of its own that stays on the screen all the way down,
+ * over everything (.site-clock). The hero keeps a spacer the header's size (.hero__top--spacer), so the layout under
+ * it, and everything the journey measures from it, is as it was.
  *
  * `visible`: held back until the loader hands over, like the rails;
  * `animate`: draws itself in with the hero's text.
@@ -50,30 +22,7 @@ export default function SiteHeader({ visible, animate }) {
   const rootRef = useRef(null);
   const markRef = useRef(null);
   const ringRef = useRef(null);
-  const [where, setWhere] = useState({ chapter: null, pinned: true });
-
-  useEffect(() => {
-    let raf = 0;
-    const update = () => {
-      raf = 0;
-      const next = whereAt(window.scrollY, window.innerHeight);
-      setWhere(was => (was.chapter === next.chapter && was.pinned === next.pinned ? was : next));
-    };
-    const schedule = () => { if (!raf) raf = requestAnimationFrame(update); };
-    update();
-    window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
-    // The journey says when its phase changes (hero → work) without the page having scrolled far.
-    const journey = document.querySelector('.journey');
-    const observer = journey ? new MutationObserver(schedule) : null;
-    observer?.observe(journey, { attributes: true, attributeFilter: ['data-phase'] });
-    return () => {
-      cancelAnimationFrame(raf);
-      observer?.disconnect();
-      window.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
-    };
-  }, []);
+  const clockRef = useRef(null);
 
   // The monogram is a coin. Under the pointer its ring spins on the vertical
   // axis — winding up to speed, holding while the pointer stays, and coasting
@@ -92,11 +41,13 @@ export default function SiteHeader({ visible, animate }) {
       coin.angle += coin.speed * dt;
       paint();
     };
-    const enter = () => {
+    const enter = event => {
+      if (event.pointerType === 'touch') return;
       gsap.killTweensOf(coin);
       if (!ticking) { ticking = true; gsap.ticker.add(tick); }
     };
     const leave = () => {
+      if (!ticking) return;
       gsap.ticker.remove(tick);
       ticking = false;
       const rest = Math.ceil((coin.angle + 1) / 360) * 360;
@@ -118,7 +69,7 @@ export default function SiteHeader({ visible, animate }) {
     const context = gsap.context(() => {
       const root = rootRef.current;
       const rule = root.querySelector('.hero__rule--top');
-      const parts = root.querySelectorAll('.hero__mark, .hero__meta, .hero__nav');
+      const parts = [...root.querySelectorAll('.hero__mark, .hero__nav'), clockRef.current.querySelector('.hero__meta')];
       if (reducedMotion) {
         gsap.set(rule, { scaleX: 1 });
         gsap.to(parts, { autoAlpha: 1, duration: .2, ease: EASE.blend });
@@ -131,28 +82,25 @@ export default function SiteHeader({ visible, animate }) {
     return () => context.revert();
   }, [animate]);
 
-  const chapter = CHAPTERS[where.chapter];
   return (
-    <div className={`site-header${visible ? ' site-header--visible' : ''}`} ref={rootRef} data-solid={!where.pinned}>
-      <header className="hero__top">
-        <div className="site-header__start">
+    <>
+      <div className={`site-header${visible ? ' site-header--visible' : ''}`} ref={rootRef}>
+        {/* Past this, the clock is on its own over the page (SketchClock: data-afloat). */}
+        <span className="site-header__sentinel" aria-hidden="true" />
+        <header className="hero__top">
           <a className="hero__mark" {...sectionLink('top')} aria-label={PERSON.name} ref={markRef}>
             <span className="hero__mark-letters" dangerouslySetInnerHTML={{ __html: letters }} />
             <span className="hero__mark-ring" ref={ringRef} dangerouslySetInnerHTML={{ __html: ring }} />
           </a>
-          {/* The chapter the reader is in, changing as they go (read by the eye; the page's headings say it otherwise). */}
-          <p className="site-header__chapter" aria-hidden="true" data-on={Boolean(chapter)}>
-            {Object.entries(CHAPTERS).map(([key, item]) => (
-              <span key={key} data-active={where.chapter === key}><span className="site-header__index">{item.index}</span>{item.label}</span>
-            ))}
-          </p>
-        </div>
+          <nav className="hero__nav" aria-label="Main navigation">
+            <RingButton {...sectionLink('contact')} motion arrow>Let’s talk</RingButton>
+          </nav>
+          <span className="hero__rule hero__rule--top" aria-hidden="true" />
+        </header>
+      </div>
+      <div className={`site-clock${visible ? ' site-clock--visible' : ''}`} ref={clockRef}>
         <SketchClock draw={animate} />
-        <nav className="hero__nav" aria-label="Main navigation">
-          <RingButton {...sectionLink('contact')} motion arrow>Let’s talk</RingButton>
-        </nav>
-        <span className="hero__rule hero__rule--top" aria-hidden="true" />
-      </header>
-    </div>
+      </div>
+    </>
   );
 }

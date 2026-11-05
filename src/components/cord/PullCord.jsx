@@ -132,6 +132,7 @@ export default function PullCord({ visible }) {
   const geom = useRef({ x: 0, rest: 0, scale: 1, ticks: [], left: 0, top: 0, offsetX: 0, offsetY: 0 });
   const ruled = useRef(new Set());
   const nightRef = useRef(false);
+  const lastPaint = useRef({ place: '', glow: '', ruledAt: '', ruledOn: 0 });
   nightRef.current = scheme === 'night';
 
   /**
@@ -208,11 +209,12 @@ export default function PullCord({ visible }) {
         }
       }
       if (lit < 0.02) continue;
-      const end = TICK_LEN * (1 - lit * SHRINK);
-      tick.el.setAttribute('d', `M0 ${y}H${end.toFixed(2)}`);
+      const end = (TICK_LEN * (1 - lit * SHRINK)).toFixed(1);
+      // (Only a tick whose length has changed is touched: every write to an SVG path is a layout.)
+      if (tick.end !== end) { tick.end = end; tick.el.setAttribute('d', `M0 ${y}H${end}`); }
       still.add(tick);
     }
-    ruled.current.forEach(tick => { if (!still.has(tick)) tick.el.setAttribute('d', tickPath(tick.y)); });
+    ruled.current.forEach(tick => { if (!still.has(tick)) { tick.end = null; tick.el.setAttribute('d', tickPath(tick.y)); } });
     ruled.current = still;
   };
 
@@ -221,15 +223,32 @@ export default function PullCord({ visible }) {
     const s = sim.current;
     const { x, scale: k } = geom.current;
     const y = s.length;
+    const drawn = lastPaint.current;
 
-    cordRef.current.setAttribute('d', `M${x.toFixed(2)} 0V${y.toFixed(2)}`);
-    const frame = `translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${k.toFixed(3)})`;
-    headRef.current.setAttribute('transform', frame);
-    poolRef.current.setAttribute('transform', frame);
-    lightRef.current.setAttribute('opacity', clamp(s.glow, 0, 1).toFixed(3));
-    hitRef.current.style.transform = `translate(${x.toFixed(1)}px, ${(y + HEAD_MID * k).toFixed(1)}px)`;
-
-    rule(x, y, clamp(s.glow, 0, 1));
+    // Only what has changed goes to the page. At rest the cord and the lamp do not move, and the slow breath of the
+    // light changes its opacity a few times a second; writing them all every frame was a layout on every frame.
+    const place = `${x.toFixed(2)}|${y.toFixed(2)}|${k.toFixed(3)}`;
+    if (place !== drawn.place) {
+      drawn.place = place;
+      cordRef.current.setAttribute('d', `M${x.toFixed(2)} 0V${y.toFixed(2)}`);
+      const frame = `translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${k.toFixed(3)})`;
+      headRef.current.setAttribute('transform', frame);
+      poolRef.current.setAttribute('transform', frame);
+      hitRef.current.style.transform = `translate(${x.toFixed(1)}px, ${(y + HEAD_MID * k).toFixed(1)}px)`;
+    }
+    const light = clamp(s.glow, 0, 1);
+    const glow = light.toFixed(2);
+    if (glow !== drawn.glow) {
+      drawn.glow = glow;
+      lightRef.current.setAttribute('opacity', glow);
+    }
+    // The graduations answer the light; moving with the lamp at once, otherwise about ten times a second.
+    const now = performance.now();
+    if (drawn.ruledAt !== place || now - drawn.ruledOn > 100) {
+      drawn.ruledAt = place;
+      drawn.ruledOn = now;
+      rule(x, y, light);
+    }
   };
 
   /** The switch throws. */
@@ -308,6 +327,7 @@ export default function PullCord({ visible }) {
       return () => { off(); stop(); };
     }
 
+    let wasNear = false;
     const step = () => {
       const dt = Math.min(gsap.ticker.deltaRatio() / 60, 1 / 20);
       s.t += dt;
@@ -327,7 +347,8 @@ export default function PullCord({ visible }) {
       s.flare *= Math.exp(-4 * dt);
       const want = clamp(((nightRef.current ? 0.15 : 0.75) + near * 0.4 + s.flare * 0.5) * breath, 0, 1.3);
       s.glow += (want - s.glow) * Math.min(1, dt * 7);
-      root.classList.toggle('cord--near', near > 0.25);
+      const isNear = near > 0.25;
+      if (isNear !== wasNear) { wasNear = isNear; root.classList.toggle('cord--near', isNear); }
 
       paint();
     };

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { JOURNAL } from '../../../content/journal.js';
 import { COVER_STICKER } from '../bookCovers.js';
 import { LITE } from '../../../lib/device.js';
+import { afterLoader } from '../../gpuWork.js';
 
 /**
  * The covers' journal, set in type (JOURNAL.type): drawn onto a canvas per
@@ -86,8 +87,7 @@ function both(c, f, kind, draw, alpha = 1) {
   c.globalAlpha = alpha;
   c.fillStyle = c.strokeStyle = look.colour;
   f.fillStyle = f.strokeStyle = look.finish;
-  // The press is a little soft at its edges, as leather gives.
-  f.filter = 'blur(1.2px)';
+  // (The press is a little soft at its edges, as leather gives: the finish is blurred once, in `band`.)
   draw(c); draw(f);
   c.restore(); f.restore();
 }
@@ -130,6 +130,22 @@ function rule(c, f) {
 }
 
 /** The elastic band: dark woven cloth, lying on the board, a little shadow either side. */
+/** Soften `context`'s whole canvas by about a pixel: down to half size and back up, smoothed. */
+function soften(context) {
+  const { canvas } = context, w = canvas.width, h = canvas.height;
+  const half = document.createElement('canvas');
+  half.width = Math.ceil(w / 2); half.height = Math.ceil(h / 2);
+  const small = half.getContext('2d');
+  small.imageSmoothingQuality = 'high';
+  small.drawImage(canvas, 0, 0, half.width, half.height);
+  context.save();
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(half, 0, 0, w, h);
+  context.restore();
+}
+
 function band(c, f, left) {
   const x = left * ART.width, w = BAND.width * ART.width;
   c.fillStyle = 'rgba(8, 2, 4, .28)';
@@ -141,6 +157,10 @@ function band(c, f, left) {
   c.strokeStyle = 'rgba(255, 255, 255, .035)';
   c.lineWidth = 1.5;
   for (let y = 0; y < ART.height; y += 7) { c.beginPath(); c.moveTo(x, y); c.lineTo(x + w, y + 4); c.stroke(); }
+  // Everything pressed so far is a little soft at its edges, as leather gives: softened once, here, before the band,
+  // by drawing it at half size and back (about a pixel's blur). A canvas filter on every draw instead was seconds of
+  // stalling in Chrome, and Safari before 18 ignores filters; reading the pixels back to blur them was 170ms a cover.
+  soften(f);
   // Cloth: a soft satin, not the leather's sheen.
   f.fillStyle = 'rgb(0, 120, 0)';
   f.fillRect(x, 0, w, ART.height);
@@ -176,7 +196,7 @@ function drawBack(c, f) {
 
 /**
  * The covers' art as textures: { front: { art, finish }, back: { art, finish } },
- * redrawn once the fonts are in (`onReady` then).
+ * drawn once the fonts are in and the loader has gone (`onReady` then).
  */
 export function makeJournalCovers(onReady) {
   const make = colour => {
@@ -188,24 +208,25 @@ export function makeJournalCovers(onReady) {
     return { canvas, texture };
   };
   const sides = { front: { art: make(true), finish: make(false) }, back: { art: make(true), finish: make(false) } };
-  const draw = () => {
-    for (const [name, paint] of [['front', drawFront], ['back', drawBack]]) {
-      const { art, finish } = sides[name];
-      const c = art.canvas.getContext('2d'), f = finish.canvas.getContext('2d');
-      // Drawn in ART's units whatever the canvas's size.
-      c.setTransform(SCALE, 0, 0, SCALE, 0, 0);
-      f.setTransform(SCALE, 0, 0, SCALE, 0, 0);
-      c.clearRect(0, 0, ART.width, ART.height);
-      f.fillStyle = '#000';
-      f.fillRect(0, 0, ART.width, ART.height);
-      paint(c, f);
-      art.texture.needsUpdate = true;
-      finish.texture.needsUpdate = true;
-    }
-    onReady?.();
+  const drawSide = (name, paint) => {
+    const { art, finish } = sides[name];
+    const c = art.canvas.getContext('2d'), f = finish.canvas.getContext('2d');
+    // Drawn in ART's units whatever the canvas's size.
+    c.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    f.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    c.clearRect(0, 0, ART.width, ART.height);
+    f.fillStyle = '#000';
+    f.fillRect(0, 0, ART.width, ART.height);
+    paint(c, f);
+    art.texture.needsUpdate = true;
+    finish.texture.needsUpdate = true;
   };
-  draw();
-  Promise.all([document.fonts?.ready, loadSaadi()]).then(draw);
+  // Drawn once the fonts are in and the opening has settled (gpuWork.afterLoader): the book is not on the first
+  // screen. A cover at a time, each its own job, so no one moment is long.
+  Promise.all([document.fonts?.ready, loadSaadi()]).then(() => {
+    afterLoader(() => drawSide('front', drawFront), 'book cover, front');
+    afterLoader(() => { drawSide('back', drawBack); onReady?.(); }, 'book cover, back');
+  });
   return {
     front: { art: sides.front.art.texture, finish: sides.front.finish.texture },
     back: { art: sides.back.art.texture, finish: sides.back.finish.texture },

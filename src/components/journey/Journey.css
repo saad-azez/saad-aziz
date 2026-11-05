@@ -1,3 +1,8 @@
+/* Read only on the elements they are set on: not inherited, or each write restyles everything inside (682 elements,
+   for the project's copy). A browser without @property inherits them, and looks the same. */
+@property --names-reveal { syntax: '<number>'; inherits: false; initial-value: 0; }
+@property --entry { syntax: '<number>'; inherits: false; initial-value: 0; }
+
 /**
  * Journey — the hero and the work on one pinned screen.
  *
@@ -9,7 +14,6 @@
  */
 
 .journey {
-  --work-reveal: 0;
   --title-reveal: 0;
   --names-reveal: 0;
   --details-reveal: 0;

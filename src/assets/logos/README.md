@@ -11,3 +11,9 @@ lottiefiles.svg). Spline, Unicorn Studio and Lenis have no mark in the set; the 
 sets their names in type.
 
 Set license: https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md
+
+## The coin's copies (`../coin`)
+
+The coin never draws these files itself. `npm run coin:marks` (scripts/build-coin-marks.mjs) renders each one to
+`coin/<name>.png` (768², the ink centred and filling 62% of the face) and works out `coin/<name>.morph.png` (the
+shape the about's five years melt between). Run it again after adding or changing a mark here.

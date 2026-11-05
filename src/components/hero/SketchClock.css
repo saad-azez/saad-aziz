@@ -145,6 +145,10 @@
   visibility: hidden;
 }
 
+/* The city's holder: it goes once the clock is on its own over the page. */
+.hero__clock-city { opacity: 1; transition: opacity .25s ease; }
+.hero__clock[data-afloat] .hero__clock-city { opacity: 0; }
+
 /* .hero__clock-label — the city, beneath. Steps aside while the curve shows. */
 .hero__clock-label {
   position: absolute;
@@ -435,9 +439,28 @@
   .hero__clock-portal-close { transition: none; }
 }
 
-/* The coin under the floating clock, and the home-bar probe: nothing on a
-   desktop. */
-.hero__clock-coin { display: none; }
+/* .hero__clock-coin — once the header has scrolled away the clock is alone over the page: this small coin under it
+   keeps it readable on anything. Faded by opacity alone. */
+.hero__clock-coin {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  width: 76px;
+  height: 76px;
+  margin: -38px 0 0 -38px;
+  border-radius: 50%;
+  background: var(--ground-raise);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .14);
+  opacity: 0;
+  transition: opacity .25s ease;
+  pointer-events: none;
+}
+.hero__clock[data-afloat] .hero__clock-coin { opacity: 1; }
+/* The names on the curve, over whatever is under them. */
+.hero__clock[data-afloat] .hero__clock-stop text { paint-order: stroke; stroke: var(--ground); stroke-width: 7px; stroke-linejoin: round; }
+
+/* The home-bar probe. */
 .hero__clock-safe {
   position: fixed;
   left: 0;
@@ -449,10 +472,9 @@
 }
 
 /* --- Phones ------------------------------------------------------------------
-   The header drops to two columns here (Hero.css) and hides .hero__meta. The
-   clock comes back into the empty centre of the header, at the mark's size and
-   out of the grid, so the header row stays exactly as it was. No hover halo,
-   no city label (the city is inside the opened ring). */
+   Hero.css hides .hero__meta here; the clock comes back in the centre of the
+   top of the screen, at the mark's size. No hover halo, no city label (the city
+   is inside the opened ring). */
 @media (max-width: 700px) {
   .hero__meta.hero__clock {
     display: block;
@@ -466,26 +488,7 @@
   .hero__clock::before,
   .hero__clock-label { display: none; }
 
-  /* Floating, once the header has scrolled away: fixed at the bottom centre,
-     on a coin so it reads over whatever is beneath. FLOAT_GAP in the script. */
-  .hero__meta.hero__clock[data-float] {
-    position: fixed;
-    top: auto;
-    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-  }
-  .hero__clock[data-float] .hero__clock-coin {
-    display: block;
-    position: absolute;
-    z-index: 2;
-    left: 50%;
-    top: 50%;
-    width: 64px;
-    height: 64px;
-    margin: -32px 0 0 -32px;
-    border-radius: 50%;
-    background: var(--ground-raise);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, .14);
-  }
+  .hero__clock-coin { width: 64px; height: 64px; margin: -32px 0 0 -32px; }
 
   /* Opened: the two cards side by side, the four names beneath, centred in
      the ring. Sizes follow --r1, the ring's radius. */

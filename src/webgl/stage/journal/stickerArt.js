@@ -8,6 +8,13 @@ import gsap from '../../../assets/logos/brand/gsap-on-light.svg';
 import figma from '../../../assets/logos/brand/figma.svg';
 import spline from '../../../assets/logos/brand/spline.png';
 
+
+/**
+ * The stickers' canvases' options. (Software drawing, willReadFrequently, was tried while they were drawn under the
+ * loader; now they wait until after it (Stickers.js), and the GPU draws them faster: 42ms for all against 53ms.)
+ */
+const CANVAS = {};
+
 /**
  * The stickers' printing (JOURNAL.stickers): each drawn once onto a canvas,
  * die-cut with a white vinyl border round whatever shape it is, with a second
@@ -74,7 +81,7 @@ function inked(c, img, x, y, size, colour) {
   const w = size * img.naturalWidth / img.naturalHeight;
   const scratch = document.createElement('canvas');
   scratch.width = Math.ceil(w); scratch.height = Math.ceil(size);
-  const s = scratch.getContext('2d');
+  const s = scratch.getContext('2d', CANVAS);
   s.drawImage(img, 0, 0, w, size);
   s.globalCompositeOperation = 'source-in';
   s.fillStyle = colour;
@@ -283,10 +290,10 @@ function dieCut(inner, border, colour) {
   const out = document.createElement('canvas');
   out.width = inner.width + border * 2;
   out.height = inner.height + border * 2;
-  const c = out.getContext('2d');
+  const c = out.getContext('2d', CANVAS);
   const silhouette = document.createElement('canvas');
   silhouette.width = inner.width; silhouette.height = inner.height;
-  const s = silhouette.getContext('2d');
+  const s = silhouette.getContext('2d', CANVAS);
   s.drawImage(inner, 0, 0);
   s.globalCompositeOperation = 'source-in';
   s.fillStyle = colour;
@@ -302,6 +309,22 @@ function dieCut(inner, border, colour) {
 const GRID = 64;
 
 /**
+ * Sticker `spec`'s canvases at their size, still blank, and nothing solid to pick up: what the book is built with
+ * while the loader is up. drawSticker fills them in afterwards.
+ */
+export function blankSticker(spec) {
+  const [w, h] = KINDS[spec.kind].size;
+  const border = Math.round(Math.max(w, h) * .045);
+  const make = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = w + border * 2; canvas.height = h + border * 2;
+    return canvas;
+  };
+  const colour = make();
+  return { colour, finish: make(), aspect: colour.height / colour.width, solid: () => false };
+}
+
+/**
  * Draw sticker `spec` into `into` ({ colour, finish } canvases, made here the
  * first time): returns { colour, finish, aspect, solid(u, v) }.
  */
@@ -311,32 +334,32 @@ export function drawSticker(spec, into = {}) {
   const border = Math.round(Math.max(w, h) * .045);
   const inner = document.createElement('canvas');
   inner.width = w; inner.height = h;
-  kind.art(inner.getContext('2d'), spec);
+  kind.art(inner.getContext('2d', CANVAS), spec);
   // Colour: the white border, then the drawing on it.
   const colour = into.colour ?? document.createElement('canvas');
   colour.width = w + border * 2; colour.height = h + border * 2;
-  const cc = colour.getContext('2d');
+  const cc = colour.getContext('2d', CANVAS);
   cc.clearRect(0, 0, colour.width, colour.height);
   cc.drawImage(dieCut(inner, border, '#fdfcf9'), 0, 0);
   cc.drawImage(inner, border, border);
   // Finish: the border gloss vinyl; the drawing what it is made of, only where it is drawn.
   const skin = document.createElement('canvas');
   skin.width = w; skin.height = h;
-  const sc = skin.getContext('2d');
+  const sc = skin.getContext('2d', CANVAS);
   if (kind.finish) kind.finish(sc, spec);
   else { sc.fillStyle = 'rgb(0, 255, 0)'; sc.fillRect(0, 0, w, h); }
   sc.globalCompositeOperation = 'destination-in';
   sc.drawImage(inner, 0, 0);
   const finish = into.finish ?? document.createElement('canvas');
   finish.width = colour.width; finish.height = colour.height;
-  const fc = finish.getContext('2d');
+  const fc = finish.getContext('2d', CANVAS);
   fc.fillStyle = 'rgb(0, 200, 0)';
   fc.fillRect(0, 0, finish.width, finish.height);
   fc.drawImage(skin, border, border);
   // Where it is solid, for picking it up.
   const probe = document.createElement('canvas');
   probe.width = probe.height = GRID;
-  const pc = probe.getContext('2d');
+  const pc = probe.getContext('2d', CANVAS);
   pc.drawImage(colour, 0, 0, GRID, GRID);
   const alpha = pc.getImageData(0, 0, GRID, GRID).data;
   const grid = new Uint8Array(GRID * GRID);
